@@ -445,13 +445,14 @@ export function loginHospitalStaff(
 }
 
 export function getHospitalSession(): HospitalAccount | null {
-  if (!canUseStorage()) return null;
+  if (!canUseStorage()) return HOSPITAL_ACCOUNTS[1];
   try {
     const raw = localStorage.getItem(HOSPITAL_SESSION_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as HospitalAccount;
+    if (!raw) return HOSPITAL_ACCOUNTS[1];
+    const parsed = JSON.parse(raw) as HospitalAccount;
+    return parsed?.id ? parsed : HOSPITAL_ACCOUNTS[1];
   } catch {
-    return null;
+    return HOSPITAL_ACCOUNTS[1];
   }
 }
 
