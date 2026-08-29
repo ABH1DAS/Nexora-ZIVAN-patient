@@ -4,6 +4,7 @@ import {
   addEmergencyContact as addSupabaseContact,
   fetchEmergencyContacts as fetchSupabaseContacts,
   removeEmergencyContact as removeSupabaseContact,
+  getActiveUserId,
   isSupabaseConfigured,
 } from "@/lib/supabase";
 
@@ -45,10 +46,14 @@ function canUseStorage() {
   return typeof window !== "undefined";
 }
 
-export function getEmergencyContacts(): EmergencyContactItem[] {
+function getUserStorageKey(userId = getActiveUserId()) {
+  return `${STORAGE_KEY}_${userId}`;
+}
+
+export function getEmergencyContacts(userId = getActiveUserId()): EmergencyContactItem[] {
   if (!canUseStorage()) return DEFAULT_CONTACTS;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getUserStorageKey(userId)) || localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_CONTACTS;
     const parsed = JSON.parse(raw) as EmergencyContactItem[];
     return parsed.length > 0 ? parsed : DEFAULT_CONTACTS;
@@ -57,36 +62,39 @@ export function getEmergencyContacts(): EmergencyContactItem[] {
   }
 }
 
-export function saveEmergencyContacts(contacts: EmergencyContactItem[]): void {
+export function saveEmergencyContacts(contacts: EmergencyContactItem[], userId = getActiveUserId()): void {
   if (!canUseStorage()) return;
+  localStorage.setItem(getUserStorageKey(userId), JSON.stringify(contacts));
   localStorage.setItem(STORAGE_KEY, JSON.stringify(contacts));
   window.dispatchEvent(new CustomEvent("zivan-contacts-updated", { detail: contacts }));
 }
 
-export function addEmergencyContact(contact: Omit<EmergencyContactItem, "id">): EmergencyContactItem {
+export function addEmergencyContact(
+  contact: Omit<EmergencyContactItem, "id">,
+  userId = getActiveUserId()
+): EmergencyContactItem {
   const newContact: EmergencyContactItem = {
     ...contact,
     id: `contact_${Date.now()}`,
   };
-  const current = getEmergencyContacts();
+  const current = getEmergencyContacts(userId);
   const updated = [newContact, ...current];
-  saveEmergencyContacts(updated);
+  saveEmergencyContacts(updated, userId);
 
-  // Sync to Supabase in real-time
+  // Sync to Supabase in real-time for active user
   if (isSupabaseConfigured) {
     addSupabaseContact({
-      patient_id: "demo-user",
+      patient_id: userId,
       name: contact.name,
       phone: contact.phone,
       relationship: contact.relationship,
       priority: contact.priority,
     }).then((created) => {
       if (created && created.id) {
-        // Update local contact with server id if needed
-        const local = getEmergencyContacts().map((c) =>
+        const local = getEmergencyContacts(userId).map((c) =>
           c.id === newContact.id ? { ...c, id: created.id! } : c
         );
-        saveEmergencyContacts(local);
+        saveEmergencyContacts(local, userId);
       }
     });
   }
@@ -94,10 +102,10 @@ export function addEmergencyContact(contact: Omit<EmergencyContactItem, "id">): 
   return newContact;
 }
 
-export function removeEmergencyContact(id: string): void {
-  const current = getEmergencyContacts();
+export function removeEmergencyContact(id: string, userId = getActiveUserId()): void {
+  const current = getEmergencyContacts(userId);
   const updated = current.filter((c) => c.id !== id);
-  saveEmergencyContacts(updated);
+  saveEmergencyContacts(updated, userId);
 
   // Sync delete to Supabase
   if (isSupabaseConfigured) {
@@ -107,10 +115,11 @@ export function removeEmergencyContact(id: string): void {
 
 export function subscribeEmergencyContacts(
   listener: (contacts: EmergencyContactItem[]) => void,
+  userId = getActiveUserId()
 ) {
-  // Sync from Supabase on subscription
+  // Sync from Supabase on subscription for active user
   if (isSupabaseConfigured) {
-    fetchSupabaseContacts("demo-user").then((remote) => {
+    fetchSupabaseContacts(userId).then((remote) => {
       if (remote && remote.length > 0) {
         const mapped: EmergencyContactItem[] = remote.map((c) => ({
           id: c.id || `contact_${Date.now()}`,
@@ -119,25 +128,27 @@ export function subscribeEmergencyContacts(
           relationship: c.relationship,
           priority: c.priority,
         }));
-        saveEmergencyContacts(mapped);
+        saveEmergencyContacts(mapped, userId);
         listener(mapped);
       }
     });
   }
 
   if (!canUseStorage()) return () => undefined;
-  const emit = () => listener(getEmergencyContacts());
+  const emit = () => listener(getEmergencyContacts(userId));
   const onStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) emit();
+    if (event.key === getUserStorageKey(userId) || event.key === STORAGE_KEY) emit();
   };
   const onCustom = () => emit();
 
   window.addEventListener("storage", onStorage);
   window.addEventListener("zivan-contacts-updated", onCustom);
+  window.addEventListener("zivan-auth-user-updated", onCustom);
   emit();
 
   return () => {
     window.removeEventListener("storage", onStorage);
     window.removeEventListener("zivan-contacts-updated", onCustom);
+    window.removeEventListener("zivan-auth-user-updated", onCustom);
   };
 }

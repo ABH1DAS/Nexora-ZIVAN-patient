@@ -63,23 +63,25 @@ export default function DashboardProfilePage() {
   const [newMedication, setNewMedication] = useState("");
 
   useEffect(() => {
-    // 1. Fetch from Supabase
+    const activeId = user?.id || "demo-user";
+    // 1. Fetch from Supabase for active user
     if (isSupabaseConfigured) {
-      fetchHealthProfile("demo-user").then((remote) => {
+      fetchHealthProfile(activeId).then((remote) => {
         if (remote) {
           setProfile({
-            name: remote.full_name || "Abhijeet Das",
+            name: remote.full_name || user?.name || "Member",
             age: 28,
             bloodGroup: remote.blood_group || "O+",
             allergies: remote.allergies || ["Penicillin"],
-            medications: remote.medications || ["Amlodipine 5mg"],
+            medications: remote.medications || ["Vitamin D3"],
           });
         }
       });
     }
 
     if (typeof window !== "undefined") {
-      const rawProfile = localStorage.getItem(PROFILE_PREFS_KEY);
+      const userProfileKey = `${PROFILE_PREFS_KEY}_${activeId}`;
+      const rawProfile = localStorage.getItem(userProfileKey) || localStorage.getItem(PROFILE_PREFS_KEY);
       if (rawProfile) {
         try {
           setProfile(JSON.parse(rawProfile));
@@ -103,22 +105,27 @@ export default function DashboardProfilePage() {
     }
   }, [user]);
 
-  useEffect(() => subscribeEmergencyContacts(setContacts), []);
+  useEffect(() => {
+    const activeId = user?.id || "demo-user";
+    return subscribeEmergencyContacts(setContacts, activeId);
+  }, [user]);
 
   function saveAllPreferences(updatedProfile?: PatientHealthProfile, updatedGovt?: string[], updatedPvt?: string[]) {
     const profToSave = updatedProfile ?? profile;
     const govtToSave = updatedGovt ?? prefGovtIds;
     const pvtToSave = updatedPvt ?? prefPvtIds;
+    const activeId = user?.id || "demo-user";
 
     if (typeof window !== "undefined") {
+      localStorage.setItem(`${PROFILE_PREFS_KEY}_${activeId}`, JSON.stringify(profToSave));
       localStorage.setItem(PROFILE_PREFS_KEY, JSON.stringify(profToSave));
       localStorage.setItem(PREFERRED_HOSPITALS_KEY, JSON.stringify({ govt: govtToSave, pvt: pvtToSave }));
     }
 
-    // Save directly to Supabase
+    // Save directly to Supabase for active user
     if (isSupabaseConfigured) {
       saveHealthProfile({
-        patient_id: "demo-user",
+        patient_id: activeId,
         full_name: profToSave.name,
         blood_group: profToSave.bloodGroup,
         allergies: profToSave.allergies,
