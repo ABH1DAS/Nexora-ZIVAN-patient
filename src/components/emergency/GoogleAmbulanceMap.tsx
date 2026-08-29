@@ -14,6 +14,7 @@ import {
   Shield,
   Activity,
   LocateFixed,
+  Sparkles,
 } from "lucide-react";
 import { hospitals as defaultHospitals, type Hospital } from "@/data/hospitals";
 
@@ -43,8 +44,9 @@ const DEFAULT_PATIENT_COORDS: Coordinates = { lat: 26.1722, lng: 91.7594 };
 const DEFAULT_HOSPITAL_COORDS: Coordinates = { lat: 26.1557, lng: 91.7706 };
 const DEFAULT_AMBULANCE_COORDS: Coordinates = { lat: 26.1640, lng: 91.7670 };
 
+// Haversine formula to compute accurate distance in km
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
+  const R = 6371; // Earth radius in km
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -55,6 +57,7 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
   return Math.round(R * c * 10) / 10;
 }
 
+// Crisp Hospital Pin Icon with white Medical Cross
 function getHospitalIconSvg(category: "government" | "private", isSelected: boolean) {
   const bgColor = isSelected ? "#0284c7" : (category === "government" ? "#2563eb" : "#059669");
   const svg = `
@@ -73,6 +76,7 @@ function getHospitalIconSvg(category: "government" | "private", isSelected: bool
   return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
 }
 
+// Crisp Patient SOS Pin Icon
 function getPatientIconSvg() {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="38" height="48" viewBox="0 0 38 48">
@@ -89,6 +93,7 @@ function getPatientIconSvg() {
   return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
 }
 
+// Crisp Ambulance Vehicle Pin Icon
 function getAmbulanceIconSvg() {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="0 0 46 46">
@@ -134,15 +139,16 @@ export function GoogleAmbulanceMap({
   const [gpsDetecting, setGpsDetecting] = useState(false);
 
   const [etaText, setEtaText] = useState(`${etaMinutes} mins`);
-  const [distanceText, setDistanceText] = useState("1.2 km");
+  const [distanceText, setDistanceText] = useState("4.2 km");
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
   const [filterCategory, setFilterCategory] = useState<"all" | "government" | "private">("all");
-  const [mapTheme, setMapTheme] = useState<"roads" | "dark" | "satellite">("roads");
+  const [mapType, setMapType] = useState<"roadmap" | "satellite">("roadmap");
 
   const apiKey =
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
     "AIzaSyCdU5-QL9eWfz71iJE4INZYwqkF1SzM8l0";
 
+  // Compute dynamic hospital list sorted by distance to current patient GPS
   const dynamicHospitals = useMemo(() => {
     return nearbyHospitals.map((hosp) => {
       if (!hosp.coordinates) return hosp;
@@ -160,11 +166,13 @@ export function GoogleAmbulanceMap({
     }).sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
   }, [nearbyHospitals, activePatientCoords]);
 
+  // Filter hospitals
   const filteredHospitals = dynamicHospitals.filter((h) => {
     if (filterCategory === "all") return true;
     return h.category === filterCategory;
   });
 
+  // 1. Detect user's current GPS location
   function detectUserCurrentLocation() {
     if (typeof window === "undefined" || !navigator.geolocation) {
       alert("Geolocation is not supported by your browser.");
@@ -180,6 +188,7 @@ export function GoogleAmbulanceMap({
         };
         setActivePatientCoords(detectedCoords);
 
+        // Reverse geocode with Google Maps Geocoder if loaded
         if ((window as any).google?.maps?.Geocoder) {
           const geocoder = new (window as any).google.maps.Geocoder();
           geocoder.geocode({ location: detectedCoords }, (results: any, statusResult: string) => {
@@ -214,6 +223,7 @@ export function GoogleAmbulanceMap({
     );
   }
 
+  // Load Google Maps Script
   useEffect(() => {
     if (!apiKey) {
       setApiKeyAvailable(false);
@@ -244,46 +254,78 @@ export function GoogleAmbulanceMap({
     document.head.appendChild(script);
   }, [apiKey]);
 
+  // Render Map and Custom SVG Hospital Icons
   useEffect(() => {
     if (!mapsLoaded || !mapRef.current || !(window as any).google?.maps) return;
 
     const google = (window as any).google;
 
-    // 1. High-Contrast Clean Medical Road Styles (Clean Road Mode)
-    const cleanRoadStyles = [
-      { featureType: "poi.business", stylers: [{ visibility: "off" }] },
-      { featureType: "poi.attraction", stylers: [{ visibility: "off" }] },
-      { featureType: "poi.place_of_worship", stylers: [{ visibility: "off" }] },
-      { featureType: "poi.school", stylers: [{ visibility: "off" }] },
-      { featureType: "poi.sports_complex", stylers: [{ visibility: "off" }] },
-      { featureType: "transit.station.bus", stylers: [{ visibility: "off" }] },
-      { featureType: "road", elementType: "geometry", stylers: [{ visibility: "on" }, { weight: 1.2 }] },
-      { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#0f172a" }, { weight: 600 }] },
-      { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#38bdf8" }, { weight: 2 }] },
-      { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#94a3b8" }] },
-    ];
+    const darkMapStyles = [
+      { elementType: "geometry", stylers: [{ color: "#1e293b" }] },
+      { elementType: "labels.text.stroke", stylers: [{ color: "#0f172a" }] },
+      { elementType: "labels.text.fill", stylers: [{ color: "#94a3b8" }] },
 
-    // 2. High-Visibility Dark HUD Road Styles
-    const darkHudRoadStyles = [
-      { elementType: "geometry", stylers: [{ color: "#0f172a" }] },
-      { elementType: "labels.text.stroke", stylers: [{ color: "#020617" }, { weight: 3 }] },
-      { elementType: "labels.text.fill", stylers: [{ color: "#cbd5e1" }] },
-      { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-      { featureType: "poi", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-      { featureType: "poi.business", stylers: [{ visibility: "off" }] },
-      { featureType: "poi.attraction", stylers: [{ visibility: "off" }] },
-      { featureType: "poi.place_of_worship", stylers: [{ visibility: "off" }] },
-      { featureType: "poi.school", stylers: [{ visibility: "off" }] },
-      { featureType: "poi.sports_complex", stylers: [{ visibility: "off" }] },
-      { featureType: "transit.station.bus", stylers: [{ visibility: "off" }] },
-      { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#38bdf8" }] },
-      { featureType: "road", elementType: "geometry", stylers: [{ color: "#334155" }, { visibility: "on" }] },
-      { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#1e293b" }, { weight: 1.5 }] },
-      { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#f8fafc" }] },
-      { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#475569" }, { visibility: "on" }] },
-      { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#0284c7" }, { weight: 2 }] },
-      { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#38bdf8" }] },
-      { featureType: "water", elementType: "geometry", stylers: [{ color: "#082f49" }] },
+      // Completely remove all distracting non-emergency POIs (hotels, restaurants, shops, cafes)
+      {
+        featureType: "poi",
+        elementType: "labels",
+        stylers: [{ visibility: "off" }],
+      },
+      {
+        featureType: "poi",
+        elementType: "labels.icon",
+        stylers: [{ visibility: "off" }],
+      },
+      {
+        featureType: "poi.business",
+        stylers: [{ visibility: "off" }],
+      },
+      {
+        featureType: "poi.attraction",
+        stylers: [{ visibility: "off" }],
+      },
+      {
+        featureType: "poi.place_of_worship",
+        stylers: [{ visibility: "off" }],
+      },
+      {
+        featureType: "poi.school",
+        stylers: [{ visibility: "off" }],
+      },
+      {
+        featureType: "poi.sports_complex",
+        stylers: [{ visibility: "off" }],
+      },
+      {
+        featureType: "transit.station.bus",
+        stylers: [{ visibility: "off" }],
+      },
+
+      {
+        featureType: "administrative.locality",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#f8fafc" }],
+      },
+      {
+        featureType: "road",
+        elementType: "geometry",
+        stylers: [{ color: "#334155" }],
+      },
+      {
+        featureType: "road",
+        elementType: "geometry.stroke",
+        stylers: [{ color: "#1e293b" }],
+      },
+      {
+        featureType: "road.highway",
+        elementType: "geometry",
+        stylers: [{ color: "#475569" }],
+      },
+      {
+        featureType: "water",
+        elementType: "geometry",
+        stylers: [{ color: "#0f172a" }],
+      },
     ];
 
     const map = new google.maps.Map(mapRef.current, {
@@ -291,20 +333,20 @@ export function GoogleAmbulanceMap({
         lat: (activePatientCoords.lat + ambulanceCoords.lat) / 2,
         lng: (activePatientCoords.lng + ambulanceCoords.lng) / 2,
       },
-      zoom: 14,
-      mapTypeId: mapTheme === "satellite" ? "satellite" : "roadmap",
+      zoom: 13,
+      mapTypeId: mapType,
       disableDefaultUI: false,
       zoomControl: true,
       fullscreenControl: true,
       mapTypeControl: false,
-      streetViewControl: true,
-      styles: mapTheme === "satellite" ? undefined : (mapTheme === "roads" ? cleanRoadStyles : darkHudRoadStyles),
+      streetViewControl: false,
+      styles: mapType === "roadmap" ? darkMapStyles : undefined,
     });
 
     mapInstanceRef.current = map;
     const bounds = new google.maps.LatLngBounds();
 
-    // 1. Patient Marker
+    // 1. Patient Marker (Custom Red SOS Pin)
     const patientLatLng = new google.maps.LatLng(activePatientCoords.lat, activePatientCoords.lng);
     bounds.extend(patientLatLng);
 
@@ -334,7 +376,7 @@ export function GoogleAmbulanceMap({
       patientInfoWindow.open(map, patientMarker);
     });
 
-    // 2. Dispatched Ambulance Marker
+    // 2. Dispatched Ambulance Marker (Custom Vehicle Icon)
     const ambulanceLatLng = new google.maps.LatLng(ambulanceCoords.lat, ambulanceCoords.lng);
     bounds.extend(ambulanceLatLng);
 
@@ -365,7 +407,7 @@ export function GoogleAmbulanceMap({
       ambulanceInfoWindow.open(map, ambulanceMarker);
     });
 
-    // 3. Nearby Hospitals Markers
+    // 3. Nearby Hospitals Markers (Custom Cross Icons)
     filteredHospitals.forEach((hosp) => {
       if (!hosp.coordinates) return;
       const hospLatLng = new google.maps.LatLng(hosp.coordinates.lat, hosp.coordinates.lng);
@@ -423,7 +465,7 @@ export function GoogleAmbulanceMap({
       suppressMarkers: true,
       preserveViewport: false,
       polylineOptions: {
-        strokeColor: "#0284c7",
+        strokeColor: "#06b6d4",
         strokeOpacity: 0.95,
         strokeWeight: 7,
         zIndex: 85,
@@ -446,34 +488,36 @@ export function GoogleAmbulanceMap({
             if (leg.distance?.text) setDistanceText(leg.distance.text);
           }
         } else {
-          // Precise road waypoints along GS Road network
+          // Accurate road-waypoint snapped corridor along GS Road and arterial connections
           const roadSnappedCoordinates = [
-            new google.maps.LatLng(26.1557, 91.7706), // GMCH Base
+            new google.maps.LatLng(26.1557, 91.7706), // GMCH Emergency Base
             new google.maps.LatLng(26.1585, 91.7695), // GMCH Hill Link Road
-            new google.maps.LatLng(26.1612, 91.7682), // Bhangagarh Flyover Entrance
-            new google.maps.LatLng(26.1640, 91.7670), // Bhangagarh GS Road
-            new google.maps.LatLng(26.1663, 91.7648), // ABC Point GS Road
-            new google.maps.LatLng(26.1685, 91.7628), // Tarun Nagar GS Road
-            new google.maps.LatLng(26.1704, 91.7610), // Lachit Nagar GS Road
-            new google.maps.LatLng(activePatientCoords.lat, activePatientCoords.lng), // Ulubari Patient Point
+            new google.maps.LatLng(26.1612, 91.7682), // Bhangagarh Flyover Approach
+            new google.maps.LatLng(26.1640, 91.7670), // Bhangagarh Junction (GS Road)
+            new google.maps.LatLng(26.1663, 91.7648), // ABC Point (GS Road)
+            new google.maps.LatLng(26.1685, 91.7628), // Tarun Nagar / Rajiv Bhawan (GS Road)
+            new google.maps.LatLng(26.1704, 91.7610), // Lachit Nagar (GS Road)
+            new google.maps.LatLng(activePatientCoords.lat, activePatientCoords.lng), // Ulubari Point (Patient Location)
           ];
 
+          // Outer glowing route outline
           fallbackOuterPolyline = new google.maps.Polyline({
             path: roadSnappedCoordinates,
             geodesic: true,
-            strokeColor: "#0c4a6e",
-            strokeOpacity: 0.85,
-            strokeWeight: 10,
+            strokeColor: "#083344",
+            strokeOpacity: 0.8,
+            strokeWeight: 9,
             zIndex: 80,
             map,
           });
 
+          // Inner vibrant road polyline
           fallbackInnerPolyline = new google.maps.Polyline({
             path: roadSnappedCoordinates,
             geodesic: true,
-            strokeColor: "#0284c7",
+            strokeColor: "#06b6d4",
             strokeOpacity: 0.95,
-            strokeWeight: 6,
+            strokeWeight: 5,
             zIndex: 85,
             icons: [
               {
@@ -481,11 +525,11 @@ export function GoogleAmbulanceMap({
                   path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
                   scale: 3,
                   strokeColor: "#ffffff",
-                  fillColor: "#38bdf8",
+                  fillColor: "#0284c7",
                   fillOpacity: 1,
                 },
                 offset: "50%",
-                repeat: "90px",
+                repeat: "100px",
               },
             ],
             map,
@@ -515,7 +559,7 @@ export function GoogleAmbulanceMap({
     driverName,
     status,
     filterCategory,
-    mapTheme,
+    mapType,
   ]);
 
   function centerOnAmbulance() {
@@ -544,7 +588,7 @@ export function GoogleAmbulanceMap({
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-teal-300">
-                Guwahati Road Dispatch · {filteredHospitals.length} Hospitals
+                Hospital GPS Network · {filteredHospitals.length} Hospitals
               </span>
             </div>
             <p className="text-xs font-bold text-white flex items-center gap-1.5 truncate max-w-xs sm:max-w-md">
@@ -592,31 +636,6 @@ export function GoogleAmbulanceMap({
             </button>
           </div>
 
-          {/* Map Layer Mode Switcher: Proper Roads / Dark HUD / Satellite */}
-          <div className="flex rounded-xl bg-slate-800/90 p-1 text-[11px] font-bold text-slate-300 border border-white/5">
-            <button
-              type="button"
-              onClick={() => setMapTheme("roads")}
-              className={`rounded-lg px-2.5 py-1 transition ${mapTheme === "roads" ? "bg-sky-600 text-white shadow" : "hover:text-white"}`}
-            >
-              🛣️ Road Map
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapTheme("dark")}
-              className={`rounded-lg px-2.5 py-1 transition ${mapTheme === "dark" ? "bg-slate-700 text-white shadow" : "hover:text-white"}`}
-            >
-              🌙 Dark HUD
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapTheme("satellite")}
-              className={`rounded-lg px-2.5 py-1 transition ${mapTheme === "satellite" ? "bg-emerald-700 text-white shadow" : "hover:text-white"}`}
-            >
-              🛰️ Satellite
-            </button>
-          </div>
-
           <button
             type="button"
             onClick={centerOnAmbulance}
@@ -631,6 +650,14 @@ export function GoogleAmbulanceMap({
           >
             📍 Patient
           </button>
+          <button
+            type="button"
+            onClick={() => setMapType((t) => (t === "roadmap" ? "satellite" : "roadmap"))}
+            className="rounded-xl border border-white/10 bg-slate-800/80 px-2.5 py-1 text-[11px] font-bold text-slate-300 hover:text-white transition"
+          >
+            <Layers className="inline h-3 w-3 mr-1" />
+            {mapType === "roadmap" ? "Satellite" : "Roads"}
+          </button>
         </div>
       </div>
 
@@ -639,82 +666,20 @@ export function GoogleAmbulanceMap({
         {apiKeyAvailable && mapsLoaded ? (
           <div ref={mapRef} className="h-full w-full" />
         ) : (
-          /* Realistic Guwahati Road Vector Canvas with Real Street Labels & Markings */
+          /* Fallback Radar with Hospital Network & Ambulance Plotting */
           <div className="relative h-full w-full bg-[#0a1120] p-6 flex flex-col justify-between overflow-hidden">
-            {/* Background Road Grid */}
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] opacity-30" />
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-40" />
 
-            {/* SVG High-Definition Road Network */}
-            <svg className="absolute inset-0 h-full w-full pointer-events-none">
-              {/* GS Road Arterial Highway (Main Road) */}
-              <path
-                d="M 120 380 Q 260 300 480 210 T 820 110"
-                fill="none"
-                stroke="#334155"
-                strokeWidth="28"
-                strokeLinecap="round"
-              />
-              {/* Road Center Line (GS Road) */}
-              <path
-                d="M 120 380 Q 260 300 480 210 T 820 110"
-                fill="none"
-                stroke="#64748b"
-                strokeWidth="2"
-                strokeDasharray="8 8"
-              />
-
-              {/* Bhangagarh Flyover Branch */}
-              <path
-                d="M 480 210 L 520 80"
-                fill="none"
-                stroke="#334155"
-                strokeWidth="18"
-                strokeLinecap="round"
-              />
-
-              {/* Rajgarh Link Road */}
-              <path
-                d="M 260 300 L 220 120"
-                fill="none"
-                stroke="#1e293b"
-                strokeWidth="14"
-                strokeLinecap="round"
-              />
-
-              {/* Live Emergency Driving Polyline (Cyan Glow on GS Road) */}
-              <path
-                d="M 480 210 Q 360 260 220 320"
-                fill="none"
-                stroke="#0284c7"
-                strokeWidth="8"
-                strokeLinecap="round"
-                className="animate-pulse"
-              />
-              <path
-                d="M 480 210 Q 360 260 220 320"
-                fill="none"
-                stroke="#38bdf8"
-                strokeWidth="4"
-                strokeDasharray="10 10"
-              />
-
-              {/* Street Names */}
-              <text x="520" y="235" fill="#94a3b8" fontSize="11" fontWeight="bold" fontFamily="sans-serif">
-                GS Road (Bhangagarh Flyover)
-              </text>
-              <text x="140" y="340" fill="#94a3b8" fontSize="11" fontWeight="bold" fontFamily="sans-serif">
-                GS Road (Ulubari Junction)
-              </text>
-              <text x="230" y="110" fill="#64748b" fontSize="10" fontFamily="sans-serif">
-                Rajgarh Road
-              </text>
-              <text x="530" y="70" fill="#64748b" fontSize="10" fontFamily="sans-serif">
-                GMCH Link Road
-              </text>
+            {/* SVG Connecting Lines to Hospitals */}
+            <svg className="absolute inset-0 h-full w-full pointer-events-none opacity-60">
+              <line x1="25%" y1="65%" x2="50%" y2="25%" stroke="#38bdf8" strokeWidth="2" strokeDasharray="4 4" />
+              <line x1="25%" y1="65%" x2="78%" y2="45%" stroke="#10b981" strokeWidth="2" strokeDasharray="4 4" />
+              <line x1="25%" y1="65%" x2="40%" y2="80%" stroke="#2563eb" strokeWidth="2" strokeDasharray="4 4" />
+              <line x1="25%" y1="65%" x2="65%" y2="35%" stroke="#14b8a6" strokeWidth="4" className="animate-pulse" />
             </svg>
 
-            {/* Patient Pin (Ulubari Point) */}
-            <div className="absolute left-[22%] top-[72%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center z-10">
+            {/* Patient Pin */}
+            <div className="absolute left-[25%] top-[65%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center z-10">
               <div className="relative flex items-center justify-center">
                 <span className="absolute h-10 w-10 rounded-full bg-rose-500/40 animate-ping" />
                 <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-600 text-white shadow-[0_0_20px_rgba(239,68,68,0.8)]">
@@ -722,12 +687,12 @@ export function GoogleAmbulanceMap({
                 </div>
               </div>
               <span className="mt-1.5 rounded-md bg-slate-900/90 px-2 py-0.5 text-[10px] font-bold text-rose-300 border border-rose-500/40 shadow">
-                You (26.1722, 91.7594)
+                You (Current GPS)
               </span>
             </div>
 
-            {/* Ambulance Pin (Bhangagarh GS Road) */}
-            <div className="absolute left-[54%] top-[46%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center z-10">
+            {/* Ambulance Pin */}
+            <div className="absolute left-[65%] top-[35%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center z-10">
               <div className="relative flex items-center justify-center">
                 <span className="absolute h-12 w-12 rounded-full bg-teal-500/40 animate-ping" />
                 <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-500 text-slate-950 font-bold shadow-[0_0_25px_rgba(20,184,166,0.9)]">
@@ -735,26 +700,35 @@ export function GoogleAmbulanceMap({
                 </div>
               </div>
               <span className="mt-1.5 rounded-md bg-slate-900/90 px-2 py-0.5 text-[10px] font-bold text-teal-300 border border-teal-500/40 shadow">
-                {vehicleNumber} (Driving along GS Road)
+                {vehicleNumber} ({ambulanceType.toUpperCase()})
               </span>
             </div>
 
-            {/* Nearby Hospital Nodes */}
-            <div className="absolute left-[62%] top-[18%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center z-10">
+            {/* Nearby Hospital Nodes with Hospital Icons */}
+            <div className="absolute left-[50%] top-[25%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center z-10">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white font-bold shadow-[0_0_15px_rgba(37,99,235,0.8)] border border-white/20">
                 🏥
               </div>
               <span className="mt-1 rounded-md bg-slate-900/90 px-2 py-0.5 text-[9px] font-bold text-blue-300 border border-blue-500/30">
-                GMCH Trauma (45 Beds Free)
+                AIIMS Central (34 Beds)
               </span>
             </div>
 
-            <div className="absolute left-[82%] top-[30%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center z-10">
+            <div className="absolute left-[78%] top-[45%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center z-10">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white font-bold shadow-[0_0_15px_rgba(16,185,129,0.8)] border border-white/20">
                 🏥
               </div>
               <span className="mt-1 rounded-md bg-slate-900/90 px-2 py-0.5 text-[9px] font-bold text-emerald-300 border border-emerald-500/30">
-                GNRC Super-Specialty (28 Beds)
+                City Super-Specialty (28 Beds)
+              </span>
+            </div>
+
+            <div className="absolute left-[40%] top-[80%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center z-10">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white font-bold shadow-[0_0_15px_rgba(37,99,235,0.8)] border border-white/20">
+                🏥
+              </div>
+              <span className="mt-1 rounded-md bg-slate-900/90 px-2 py-0.5 text-[9px] font-bold text-blue-300 border border-blue-500/30">
+                Safdarjung Civil (19 Beds)
               </span>
             </div>
           </div>
@@ -769,7 +743,7 @@ export function GoogleAmbulanceMap({
         </div>
       </div>
 
-      {/* Nearby Hospital Cards Carousel */}
+      {/* Nearby Hospital Cards Carousel (Sorted by Distance to Current GPS) */}
       <div className="border-t border-white/10 bg-slate-900/95 p-4 backdrop-blur-md">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
