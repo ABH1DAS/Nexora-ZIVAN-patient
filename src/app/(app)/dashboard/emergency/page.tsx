@@ -105,14 +105,14 @@ export default function DashboardEmergencyPage() {
     const chosenHosp = hospitals.find((h) => h.id === selectedHospitalId) ?? hospitals[0];
     const created = createAmbulanceRequest({
       patientId: user?.email ? `patient_${user.email.split("@")[0]}` : "patient_abhi_101",
-      patientName: user?.name ?? "Abhi Sharma",
+      patientName: user?.name ?? "Abhijeet Das",
       patientPhone: "+91 98765 43210",
-      locationLabel: "742 Evergreen Terrace, Sector 14, Central Metro",
-      coordinates: { lat: 28.6139, lng: 77.209 },
+      locationLabel: "GS Road, Ulubari / Bhangagarh, Guwahati, Assam 781007",
+      coordinates: { lat: 26.1722, lng: 91.7594 },
       hospitalId: chosenHosp.id,
       ambulanceType: selectedAmbulanceType,
       doctorSpecialization: selectedSpecialization,
-      estimatedPrivateFare: selectedAmbulanceType === "private" ? (chosenHosp.estimatedFare ?? "₹450–₹750 (Est.)") : undefined,
+      estimatedPrivateFare: selectedAmbulanceType === "private" ? (chosenHosp.estimatedFare ?? "₹400–₹600 (Est.)") : undefined,
       icuRequirement: chosenHosp.icuStatus === "Available",
       notes: `SOS Emergency confirmed. Type: ${selectedAmbulanceType}. Doctor: ${selectedSpecialization}. Hospital: ${chosenHosp.name}`,
     });
