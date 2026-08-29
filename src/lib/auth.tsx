@@ -125,6 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isSupabaseConfigured) {
         const remoteUser = await fetchUserByEmail(normalized);
         if (remoteUser) {
+          // If remote user has a stored password, verify it
+          if (remoteUser.password && remoteUser.password !== password) {
+            return { ok: false as const, error: "Incorrect password for this account." };
+          }
+
           authUser = {
             id: remoteUser.id,
             name: remoteUser.name,
@@ -138,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 2. Check local session or create new
+      // 2. Fallback check for local storage or demo account
       const existing = readStoredUser();
       const userId = existing?.email === normalized ? existing.id : (normalized === "abhi@zivan.health" ? "demo-user" : `user_${normalized.replace(/[^a-zA-Z0-9]/g, "_")}`);
       const name =
@@ -162,9 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       persist(authUser);
 
-      // 3. Connect & ensure user tables exist in Supabase
+      // 3. Connect & ensure user credentials exist in Supabase
       if (isSupabaseConfigured) {
         createInitialUserData(authUser.id, authUser.name, authUser.email, {
+          password,
           phone: authUser.phone,
           bloodGroup: authUser.bloodGroup,
           plan: authUser.plan,
@@ -208,9 +214,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       persist(newUser);
 
-      // Provision all connected tables in Supabase for this new user
+      // Provision all connected tables in Supabase for this new user including password credentials
       if (isSupabaseConfigured) {
         await createInitialUserData(newUser.id, newUser.name, newUser.email, {
+          password,
           phone,
           bloodGroup,
           emergencyContactName: options?.emergencyContactName,

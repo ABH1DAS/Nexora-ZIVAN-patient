@@ -30,6 +30,7 @@ export interface SupabaseUser {
   id: string;
   email: string;
   name: string;
+  password?: string;
   phone?: string;
   plan?: "Free" | "Plus" | "Family";
   avatar_url?: string;
@@ -242,23 +243,24 @@ export function getActiveUserId(): string {
  */
 export async function fetchUserByEmail(
   email: string
-): Promise<{ id: string; name: string; email: string; phone?: string; bloodGroup?: string; plan?: "Free" | "Plus" | "Family" } | null> {
+): Promise<{ id: string; name: string; email: string; password?: string; phone?: string; bloodGroup?: string; plan?: "Free" | "Plus" | "Family" } | null> {
   if (!supabase) return null;
   const normalized = email.trim().toLowerCase();
 
   try {
     // 1. Try querying users table
-    const { data: userData } = await supabase
+    const { data: userData, error: userErr } = await supabase
       .from("users")
       .select("*")
       .eq("email", normalized)
       .maybeSingle();
 
-    if (userData) {
+    if (userData && !userErr) {
       return {
         id: userData.id,
         name: userData.name,
         email: userData.email,
+        password: userData.password,
         phone: userData.phone,
         bloodGroup: userData.blood_group,
         plan: (userData.plan as "Free" | "Plus" | "Family") || "Plus",
@@ -297,6 +299,7 @@ export async function fetchUserByEmail(
           id: "demo-user",
           name: demoHp.full_name || "Abhijeet Das",
           email: normalized,
+          password: "demo1234",
           phone: demoHp.doctor_phone || "+91 98765 43210",
           bloodGroup: demoHp.blood_group || "O+",
           plan: "Plus",
@@ -312,13 +315,15 @@ export async function fetchUserByEmail(
 }
 
 /**
- * Creates and initializes all connected tables for a newly signed-up user in Supabase
+ * Creates and initializes all connected tables for a newly signed-up user in Supabase,
+ * including saving credentials in the users table.
  */
 export async function createInitialUserData(
   userId: string,
   name: string,
   email: string,
   options?: {
+    password?: string;
     phone?: string;
     bloodGroup?: string;
     emergencyContactName?: string;
@@ -336,26 +341,27 @@ export async function createInitialUserData(
     const contactPhone = options?.emergencyContactPhone || "+91 98765 43210";
     const plan = options?.plan || "Free";
 
-    // 1. Users Table (if table exists)
+    // 1. Save credentials in Users Table
     try {
-      await supabase.from("users").upsert(
-        {
-          id: userId,
-          email,
-          name,
-          phone,
-          plan,
-          blood_group: bloodGroup,
-          created_at: now,
-          updated_at: now,
-        },
-        { onConflict: "id" }
-      );
+      const userPayload: Record<string, any> = {
+        id: userId,
+        email: email.trim().toLowerCase(),
+        name,
+        phone,
+        plan,
+        blood_group: bloodGroup,
+        created_at: now,
+        updated_at: now,
+      };
+      if (options?.password) {
+        userPayload.password = options.password;
+      }
+      await supabase.from("users").upsert(userPayload, { onConflict: "id" });
     } catch {
       // ignore
     }
 
-    // 2. Health Profile (User Root Record)
+    // 2. Health Profile (User Clinical Profile)
     await supabase.from("health_profiles").upsert(
       {
         patient_id: userId,
