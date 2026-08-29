@@ -55,7 +55,7 @@ export function getTimelineStep(status: AmbulanceRequestStatus): EmergencyTimeli
   }
 }
 
-export type AmbulanceType = "government" | "private";
+export type AmbulanceType = "government" | "private" | "icu";
 
 export interface AmbulanceRequest {
   id: string;
@@ -93,7 +93,17 @@ export interface AmbulanceRequest {
   
   etaMinutes?: number;
   acceptedBy?: string;
-  demo: true;
+  allocatedBed?: string;
+  bloodCrossMatched?: boolean;
+  handoverNotes?: string;
+  vitals?: {
+    hr?: number;
+    bp?: string;
+    spo2?: number;
+    rr?: number;
+    temp?: number;
+  };
+  demo?: boolean;
 }
 
 export interface HospitalAccount {
