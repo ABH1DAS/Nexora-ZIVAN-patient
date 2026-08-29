@@ -342,23 +342,26 @@ export async function createInitialUserData(
     const plan = options?.plan || "Free";
 
     // 1. Save credentials in Users Table
-    try {
-      const userPayload: Record<string, any> = {
-        id: userId,
-        email: email.trim().toLowerCase(),
-        name,
-        phone,
-        plan,
-        blood_group: bloodGroup,
-        created_at: now,
-        updated_at: now,
-      };
-      if (options?.password) {
-        userPayload.password = options.password;
-      }
-      await supabase.from("users").upsert(userPayload, { onConflict: "id" });
-    } catch {
-      // ignore
+    const userPayload: Record<string, any> = {
+      id: userId,
+      email: email.trim().toLowerCase(),
+      name,
+      phone,
+      plan,
+      blood_group: bloodGroup,
+      created_at: now,
+      updated_at: now,
+    };
+    if (options?.password) {
+      userPayload.password = options.password;
+    }
+    
+    const { error: userInsertErr } = await supabase
+      .from("users")
+      .upsert(userPayload, { onConflict: "id" });
+      
+    if (userInsertErr) {
+      console.warn("Note on public.users table insert:", userInsertErr.message);
     }
 
     // 2. Health Profile (User Clinical Profile)
