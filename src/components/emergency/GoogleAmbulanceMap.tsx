@@ -429,12 +429,14 @@ export function GoogleAmbulanceMap({
     });
 
     // 4. Driving Route from Ambulance to Patient Location
+    let fallbackPolyline: any = null;
+
     const directionsService = new google.maps.DirectionsService();
     const directionsRenderer = new google.maps.DirectionsRenderer({
       map,
       suppressMarkers: true,
       polylineOptions: {
-        strokeColor: "#14b8a6",
+        strokeColor: "#06b6d4",
         strokeOpacity: 0.95,
         strokeWeight: 6,
       },
@@ -454,11 +456,39 @@ export function GoogleAmbulanceMap({
             if (leg.duration?.text) setEtaText(leg.duration.text);
             if (leg.distance?.text) setDistanceText(leg.distance.text);
           }
+        } else {
+          // Guaranteed Fallback Polyline if Directions API has restriction/quota
+          const routePath = [
+            new google.maps.LatLng(ambulanceCoords.lat, ambulanceCoords.lng),
+            new google.maps.LatLng(
+              (ambulanceCoords.lat + activePatientCoords.lat) / 2 + 0.001,
+              (ambulanceCoords.lng + activePatientCoords.lng) / 2 - 0.001
+            ),
+            new google.maps.LatLng(activePatientCoords.lat, activePatientCoords.lng),
+          ];
+
+          fallbackPolyline = new google.maps.Polyline({
+            path: routePath,
+            geodesic: true,
+            strokeColor: "#14b8a6",
+            strokeOpacity: 0.9,
+            strokeWeight: 5,
+            map,
+          });
+
+          const directDist = calculateDistanceKm(
+            ambulanceCoords.lat,
+            ambulanceCoords.lng,
+            activePatientCoords.lat,
+            activePatientCoords.lng
+          );
+          setDistanceText(`${directDist} km`);
+          setEtaText(`${Math.max(2, Math.round(directDist * 2.5))} mins`);
         }
       }
     );
 
-    map.fitBounds(bounds, { top: 50, bottom: 50, left: 50, right: 50 });
+    map.fitBounds(bounds, { top: 60, bottom: 60, left: 60, right: 60 });
   }, [
     mapsLoaded,
     activePatientCoords,
