@@ -16,6 +16,7 @@ import {
   subscribeEmergencyContacts,
   type EmergencyContactItem,
 } from "@/lib/contactsStore";
+import { GoogleAmbulanceMap } from "@/components/emergency/GoogleAmbulanceMap";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -220,69 +221,19 @@ export default function DashboardEmergencyPage() {
             </div>
           </div>
 
-          {/* Ride-Hailing Interactive Vector Map Canvas */}
-          <div className="relative h-80 w-full overflow-hidden bg-[#0c1821] border-y border-white/10">
-            <svg className="absolute inset-0 h-full w-full opacity-40" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" strokeWidth="1" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-              <path
-                d="M 120 220 Q 300 80, 550 160 T 820 120"
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="4"
-                strokeDasharray="8 8"
-                className="animate-pulse"
-              />
-            </svg>
-
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-64 w-64 rounded-full border border-teal-500/20 bg-teal-500/5 animate-ping" />
-
-            {/* Patient Pin */}
-            <div className="absolute left-1/4 top-2/3 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-rose-600 text-white shadow-[0_0_20px_rgba(244,63,94,0.8)]">
-                <MapPin className="h-5 w-5" />
-                <span className="absolute -inset-1 rounded-full bg-rose-600/40 animate-ping" />
-              </div>
-              <span className="mt-1 rounded-md bg-slate-900/90 px-2 py-0.5 text-[10px] font-bold text-rose-300 border border-rose-500/40">
-                You (Patient Location)
-              </span>
-            </div>
-
-            {/* Ambulance Marker */}
-            <div className="absolute left-2/3 top-1/3 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center transition-all duration-1000">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-500 text-slate-950 shadow-[0_0_25px_rgba(20,184,166,0.9)] font-bold">
-                <Ambulance className="h-6 w-6 animate-bounce" />
-              </div>
-              <span className="mt-1 rounded-md bg-slate-900/90 px-2 py-0.5 text-[10px] font-bold text-teal-300 border border-teal-500/40">
-                {activeRequest.vehicleNumber ?? "AMB-01"} ({(activeRequest.ambulanceType ?? "government").toUpperCase()})
-              </span>
-            </div>
-
-            {/* Floating Details Overlay Panel */}
-            <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/10 bg-slate-900/90 p-4 backdrop-blur-md">
-              <div className="grid gap-3 text-xs sm:grid-cols-4">
-                <div>
-                  <span className="text-slate-400 block font-medium">Driver & Paramedic</span>
-                  <strong className="text-white font-bold">{activeRequest.driverName ?? "Rajesh Kumar (Paramedic Leader)"}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-medium">Vehicle Reg No.</span>
-                  <strong className="text-teal-300 font-mono font-bold">{activeRequest.vehicleNumber ?? "DL-01-EV-4892"}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-medium">Ambulance Category</span>
-                  <strong className="text-white capitalize">{activeRequest.ambulanceType ?? "government"} Ambulance</strong>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-medium">Required Specialist</span>
-                  <strong className="text-amber-300">{activeRequest.doctorSpecialization ?? "Emergency – Not Sure"}</strong>
-                </div>
-              </div>
-            </div>
+          {/* Google Live Ambulance Tracking Map */}
+          <div className="p-4 bg-slate-950/40">
+            <GoogleAmbulanceMap
+              patientCoords={activeRequest.coordinates ?? { lat: 28.6139, lng: 77.209 }}
+              patientLabel={activeRequest.locationLabel ?? "742 Evergreen Terrace, Sector 14"}
+              ambulanceId={activeRequest.ambulanceId ?? "AMB-01"}
+              ambulanceType={activeRequest.ambulanceType ?? "government"}
+              driverName={activeRequest.driverName ?? "Rajesh Kumar (Paramedic Leader)"}
+              vehicleNumber={activeRequest.vehicleNumber ?? "DL-01-EV-4892"}
+              hospitalName={activeRequest.hospitalName ?? "City Super-Specialty Hospital"}
+              status={activeRequest.status}
+              etaMinutes={activeRequest.etaMinutes ?? 8}
+            />
           </div>
 
           {/* 8-Step Timeline Component */}
