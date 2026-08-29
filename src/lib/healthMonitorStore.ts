@@ -11,6 +11,19 @@ import {
   type WaterEntry,
 } from "@/data/devices";
 import { todayMetrics } from "@/data/healthData";
+import {
+  fetchWaterLogs,
+  logWaterIntake,
+  updateConnectedDevice,
+  saveDailyMetrics,
+  isSupabaseConfigured,
+} from "@/lib/supabase";
+
+export type EmergencyTriggerReason =
+  | "HIGH_HEART_RATE"
+  | "LOW_SPO2"
+  | "FALL_DETECTED"
+  | "MANUAL_SOS";
 
 function canUseStorage() {
   return typeof window !== "undefined";
@@ -33,6 +46,7 @@ function writeJson<T>(key: string, value: T, eventName: string) {
   window.dispatchEvent(new CustomEvent(eventName, { detail: value }));
 }
 
+// ─── Hydration / Water ──────────────────────────────────────────────────────────
 export function getWaterEntries(): WaterEntry[] {
   return readJson<WaterEntry[]>(WATER_STORAGE_KEY, []).sort(
     (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
@@ -56,6 +70,12 @@ export function addWaterEntry(amountMl: number, note?: string): WaterEntry {
   };
   const next = [entry, ...getWaterEntries()];
   writeJson(WATER_STORAGE_KEY, next, "zivan-water-updated");
+
+  // Sync to Supabase
+  if (isSupabaseConfigured) {
+    logWaterIntake("demo-user", amountMl, note);
+  }
+
   return entry;
 }
 
@@ -65,6 +85,21 @@ export function removeWaterEntry(id: string) {
 }
 
 export function subscribeWater(listener: (entries: WaterEntry[]) => void) {
+  if (isSupabaseConfigured) {
+    fetchWaterLogs("demo-user").then((remote) => {
+      if (remote && remote.length > 0) {
+        const mapped: WaterEntry[] = remote.map((w) => ({
+          id: w.id || `water_${Date.now()}`,
+          amountMl: w.amount_ml,
+          note: w.note,
+          at: w.logged_at,
+        }));
+        writeJson(WATER_STORAGE_KEY, mapped, "zivan-water-updated");
+        listener(mapped);
+      }
+    });
+  }
+
   if (!canUseStorage()) return () => undefined;
   const emit = () => listener(getWaterEntries());
   const onStorage = (event: StorageEvent) => {
@@ -80,6 +115,7 @@ export function subscribeWater(listener: (entries: WaterEntry[]) => void) {
   };
 }
 
+// ─── Fitness Band ─────────────────────────────────────────────────────────────
 export function getFitnessBand(): FitnessBand | null {
   return readJson<FitnessBand | null>(BAND_STORAGE_KEY, null);
 }
@@ -104,22 +140,45 @@ export function connectFitnessBand(optionId: string): FitnessBand {
     },
   };
   writeJson(BAND_STORAGE_KEY, band, "zivan-band-updated");
-  const vitals = getLiveVitals();
-  setLiveVitals({
-    ...vitals,
+  updateLiveVitals({
     source: "band",
-    updatedAt: new Date().toISOString(),
   });
+
+  // Sync to Supabase
+  if (isSupabaseConfigured) {
+    updateConnectedDevice({
+      id: band.id,
+      patient_id: "demo-user",
+      name: band.name,
+      brand: band.brand,
+      model: band.model,
+      connected: true,
+      battery_percent: band.batteryPercent,
+    });
+  }
+
   return band;
 }
 
 export function disconnectFitnessBand() {
   if (!canUseStorage()) return;
+  const current = getFitnessBand();
+  if (current && isSupabaseConfigured) {
+    updateConnectedDevice({
+      id: current.id,
+      patient_id: "demo-user",
+      name: current.name,
+      brand: current.brand,
+      model: current.model,
+      connected: false,
+      battery_percent: current.batteryPercent,
+    });
+  }
   localStorage.removeItem(BAND_STORAGE_KEY);
   window.dispatchEvent(new CustomEvent("zivan-band-updated", { detail: null }));
 }
 
-export function subscribeBand(listener: (band: FitnessBand | null) => void) {
+export function subscribeFitnessBand(listener: (band: FitnessBand | null) => void) {
   if (!canUseStorage()) return () => undefined;
   const emit = () => listener(getFitnessBand());
   const onStorage = (event: StorageEvent) => {
@@ -135,28 +194,42 @@ export function subscribeBand(listener: (band: FitnessBand | null) => void) {
   };
 }
 
+export const subscribeBand = subscribeFitnessBand;
+
+// ─── Live Vitals ──────────────────────────────────────────────────────────────
 export function getLiveVitals(): LiveVitals {
-  return readJson<LiveVitals>(VITALS_STORAGE_KEY, {
+  const fallback: LiveVitals = {
     heartRate: todayMetrics.heartRate,
     spo2: todayMetrics.spo2,
     steps: todayMetrics.steps,
-    updatedAt: new Date().toISOString(),
     source: "demo",
-  });
+    updatedAt: new Date().toISOString(),
+  };
+  return readJson<LiveVitals>(VITALS_STORAGE_KEY, fallback);
 }
 
 export function setLiveVitals(vitals: LiveVitals) {
   writeJson(VITALS_STORAGE_KEY, vitals, "zivan-vitals-updated");
+
+  // Sync to Supabase
+  if (isSupabaseConfigured) {
+    saveDailyMetrics({
+      patient_id: "demo-user",
+      heart_rate: vitals.heartRate,
+      spo2: vitals.spo2,
+      steps: vitals.steps,
+    });
+  }
 }
 
 export function updateLiveVitals(patch: Partial<LiveVitals>) {
-  const next = {
-    ...getLiveVitals(),
+  const current = getLiveVitals();
+  const updated: LiveVitals = {
+    ...current,
     ...patch,
     updatedAt: new Date().toISOString(),
   };
-  setLiveVitals(next);
-  return next;
+  setLiveVitals(updated);
 }
 
 export function subscribeVitals(listener: (vitals: LiveVitals) => void) {
@@ -175,20 +248,16 @@ export function subscribeVitals(listener: (vitals: LiveVitals) => void) {
   };
 }
 
+// ─── Auto Emergency Settings & Triggers ─────────────────────────────────────────
 export function getAutoEmergencySettings(): AutoEmergencySettings {
-  return {
-    ...DEFAULT_AUTO_SOS,
-    ...readJson<Partial<AutoEmergencySettings>>(AUTO_SOS_STORAGE_KEY, {}),
-  };
+  return readJson<AutoEmergencySettings>(AUTO_SOS_STORAGE_KEY, DEFAULT_AUTO_SOS);
 }
 
-export function saveAutoEmergencySettings(
-  settings: AutoEmergencySettings,
-) {
+export function saveAutoEmergencySettings(settings: AutoEmergencySettings) {
   writeJson(AUTO_SOS_STORAGE_KEY, settings, "zivan-auto-sos-updated");
 }
 
-export function subscribeAutoEmergencySettings(
+export function subscribeAutoEmergency(
   listener: (settings: AutoEmergencySettings) => void,
 ) {
   if (!canUseStorage()) return () => undefined;
@@ -206,34 +275,35 @@ export function subscribeAutoEmergencySettings(
   };
 }
 
-export type EmergencyTriggerReason =
-  | "heart_rate_drop"
-  | "spo2_drop"
-  | "manual_simulation";
+export const subscribeAutoEmergencySettings = subscribeAutoEmergency;
 
 export function evaluateEmergencyTriggers(
   vitals: LiveVitals,
   settings: AutoEmergencySettings,
+  _band?: FitnessBand | null
 ): EmergencyTriggerReason | null {
   if (!settings.enabled) return null;
-  if (vitals.heartRate > 0 && vitals.heartRate <= settings.heartRateLowBpm) {
-    return "heart_rate_drop";
+
+  if (vitals.heartRate <= settings.heartRateLowBpm || vitals.heartRate >= 140) {
+    return "HIGH_HEART_RATE";
   }
-  if (vitals.spo2 > 0 && vitals.spo2 <= settings.spo2LowPercent) {
-    return "spo2_drop";
+  if (vitals.spo2 <= settings.spo2LowPercent) {
+    return "LOW_SPO2";
   }
   return null;
 }
 
-export function triggerReasonLabel(reason: EmergencyTriggerReason) {
+export function triggerReasonLabel(reason: EmergencyTriggerReason): string {
   switch (reason) {
-    case "heart_rate_drop":
-      return "Heart rate dropped below your safety threshold";
-    case "spo2_drop":
-      return "SpO₂ dropped below your safety threshold";
-    case "manual_simulation":
-      return "Manual emergency simulation";
+    case "HIGH_HEART_RATE":
+      return "Tachycardia Alert (High Heart Rate Detected)";
+    case "LOW_SPO2":
+      return "Hypoxia Alert (Critical SpO2 Level Detected)";
+    case "FALL_DETECTED":
+      return "High-Impact Fall Detected by Smart Sensor";
+    case "MANUAL_SOS":
+      return "Manual 1-Tap Emergency SOS Triggered";
     default:
-      return "Emergency factor detected";
+      return "Medical Emergency Detected";
   }
 }

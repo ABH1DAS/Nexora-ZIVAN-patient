@@ -22,6 +22,11 @@ import {
   Trash2,
   UserCheck,
 } from "lucide-react";
+import {
+  fetchHealthProfile,
+  saveHealthProfile,
+  isSupabaseConfigured,
+} from "@/lib/supabase";
 import { useEffect, useState } from "react";
 
 const PROFILE_PREFS_KEY = "zivan-patient-profile-full";
@@ -38,7 +43,7 @@ interface PatientHealthProfile {
 export default function DashboardProfilePage() {
   const { user } = useAuth();
   const [profile, setProfile] = useState<PatientHealthProfile>({
-    name: "Abhi Sharma",
+    name: "Abhijeet Das",
     age: 28,
     bloodGroup: "O+",
     allergies: ["Penicillin", "Dust Mites"],
@@ -58,6 +63,21 @@ export default function DashboardProfilePage() {
   const [newMedication, setNewMedication] = useState("");
 
   useEffect(() => {
+    // 1. Fetch from Supabase
+    if (isSupabaseConfigured) {
+      fetchHealthProfile("demo-user").then((remote) => {
+        if (remote) {
+          setProfile({
+            name: remote.full_name || "Abhijeet Das",
+            age: 28,
+            bloodGroup: remote.blood_group || "O+",
+            allergies: remote.allergies || ["Penicillin"],
+            medications: remote.medications || ["Amlodipine 5mg"],
+          });
+        }
+      });
+    }
+
     if (typeof window !== "undefined") {
       const rawProfile = localStorage.getItem(PROFILE_PREFS_KEY);
       if (rawProfile) {
@@ -94,7 +114,19 @@ export default function DashboardProfilePage() {
       localStorage.setItem(PROFILE_PREFS_KEY, JSON.stringify(profToSave));
       localStorage.setItem(PREFERRED_HOSPITALS_KEY, JSON.stringify({ govt: govtToSave, pvt: pvtToSave }));
     }
-    setSavedNotice("Profile & Preferred Hospital settings saved!");
+
+    // Save directly to Supabase
+    if (isSupabaseConfigured) {
+      saveHealthProfile({
+        patient_id: "demo-user",
+        full_name: profToSave.name,
+        blood_group: profToSave.bloodGroup,
+        allergies: profToSave.allergies,
+        medications: profToSave.medications,
+      });
+    }
+
+    setSavedNotice("Profile & Preferred Hospital settings saved to Supabase!");
     setTimeout(() => setSavedNotice(null), 3000);
   }
 

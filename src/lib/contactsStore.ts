@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  addEmergencyContact as addSupabaseContact,
+  fetchEmergencyContacts as fetchSupabaseContacts,
+  removeEmergencyContact as removeSupabaseContact,
+  isSupabaseConfigured,
+} from "@/lib/supabase";
+
 export interface EmergencyContactItem {
   id: string;
   name: string;
@@ -64,6 +71,26 @@ export function addEmergencyContact(contact: Omit<EmergencyContactItem, "id">): 
   const current = getEmergencyContacts();
   const updated = [newContact, ...current];
   saveEmergencyContacts(updated);
+
+  // Sync to Supabase in real-time
+  if (isSupabaseConfigured) {
+    addSupabaseContact({
+      patient_id: "demo-user",
+      name: contact.name,
+      phone: contact.phone,
+      relationship: contact.relationship,
+      priority: contact.priority,
+    }).then((created) => {
+      if (created && created.id) {
+        // Update local contact with server id if needed
+        const local = getEmergencyContacts().map((c) =>
+          c.id === newContact.id ? { ...c, id: created.id! } : c
+        );
+        saveEmergencyContacts(local);
+      }
+    });
+  }
+
   return newContact;
 }
 
@@ -71,11 +98,33 @@ export function removeEmergencyContact(id: string): void {
   const current = getEmergencyContacts();
   const updated = current.filter((c) => c.id !== id);
   saveEmergencyContacts(updated);
+
+  // Sync delete to Supabase
+  if (isSupabaseConfigured) {
+    removeSupabaseContact(id);
+  }
 }
 
 export function subscribeEmergencyContacts(
   listener: (contacts: EmergencyContactItem[]) => void,
 ) {
+  // Sync from Supabase on subscription
+  if (isSupabaseConfigured) {
+    fetchSupabaseContacts("demo-user").then((remote) => {
+      if (remote && remote.length > 0) {
+        const mapped: EmergencyContactItem[] = remote.map((c) => ({
+          id: c.id || `contact_${Date.now()}`,
+          name: c.name,
+          phone: c.phone,
+          relationship: c.relationship,
+          priority: c.priority,
+        }));
+        saveEmergencyContacts(mapped);
+        listener(mapped);
+      }
+    });
+  }
+
   if (!canUseStorage()) return () => undefined;
   const emit = () => listener(getEmergencyContacts());
   const onStorage = (event: StorageEvent) => {
