@@ -244,27 +244,57 @@ export async function createInitialUserData(
   userId: string,
   name: string,
   email: string,
-  phone = "+91 98765 43210"
+  options?: {
+    phone?: string;
+    bloodGroup?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+    plan?: "Free" | "Plus" | "Family";
+  }
 ): Promise<boolean> {
   if (!supabase) return false;
   try {
     const now = new Date().toISOString();
     const today = now.split("T")[0];
+    const phone = options?.phone || "+91 98765 43210";
+    const bloodGroup = options?.bloodGroup || "O+";
+    const contactName = options?.emergencyContactName || "Dr. Ananya Sharma";
+    const contactPhone = options?.emergencyContactPhone || "+91 98765 43210";
+    const plan = options?.plan || "Free";
 
-    // 1. Health Profile (User Root Record)
+    // 1. Users Table (if table exists)
+    try {
+      await supabase.from("users").upsert(
+        {
+          id: userId,
+          email,
+          name,
+          phone,
+          plan,
+          blood_group: bloodGroup,
+          created_at: now,
+          updated_at: now,
+        },
+        { onConflict: "id" }
+      );
+    } catch {
+      // ignore
+    }
+
+    // 2. Health Profile (User Root Record)
     await supabase.from("health_profiles").upsert(
       {
         patient_id: userId,
         full_name: name,
-        blood_group: "O+",
+        blood_group: bloodGroup,
         date_of_birth: "1998-05-14",
         gender: "Male",
         allergies: ["Penicillin", "Dust Mites"],
         medications: ["Vitamin D3 1000IU"],
         medical_history: ["Mild Seasonal Allergies"],
         organ_donor: true,
-        doctor_name: "Dr. Ananya Sharma",
-        doctor_phone: phone,
+        doctor_name: contactName,
+        doctor_phone: contactPhone,
         emergency_notes: "Initial member registration",
         created_at: now,
         updated_at: now,
@@ -272,13 +302,13 @@ export async function createInitialUserData(
       { onConflict: "patient_id" }
     );
 
-    // 2. Default Emergency Contacts for this user
+    // 3. Default Emergency Contacts for this user
     await supabase.from("emergency_contacts").insert([
       {
         patient_id: userId,
-        name: "Dr. Ananya Sharma",
-        phone: "+91 98765 43210",
-        relationship: "Family Doctor",
+        name: contactName,
+        phone: contactPhone,
+        relationship: contactName.includes("Dr") ? "Family Doctor" : "Primary Contact",
         priority: "Primary",
       },
       {
@@ -290,7 +320,7 @@ export async function createInitialUserData(
       },
     ]);
 
-    // 3. Initial Daily Metrics
+    // 4. Initial Daily Metrics
     await supabase.from("daily_metrics").upsert(
       {
         patient_id: userId,
@@ -310,7 +340,7 @@ export async function createInitialUserData(
       { onConflict: "patient_id,metric_date" }
     );
 
-    // 4. Initial Water Log
+    // 5. Initial Water Log
     await supabase.from("water_logs").insert([
       {
         patient_id: userId,

@@ -24,6 +24,16 @@ export interface AuthUser {
   plan: "Free" | "Plus" | "Family";
   phone?: string;
   bloodGroup?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+}
+
+export interface SignupOptions {
+  phone?: string;
+  bloodGroup?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  plan?: "Free" | "Plus" | "Family";
 }
 
 interface AuthContextValue {
@@ -34,6 +44,7 @@ interface AuthContextValue {
     name: string,
     email: string,
     password: string,
+    options?: SignupOptions
   ) => Promise<{ ok: true; user: AuthUser } | { ok: false; error: string }>;
   logout: () => void;
   updateUser: (patch: Partial<AuthUser>) => void;
@@ -130,7 +141,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Connect & ensure user data exists in Supabase
       if (isSupabaseConfigured) {
-        createInitialUserData(authUser.id, authUser.name, authUser.email, authUser.phone);
+        createInitialUserData(authUser.id, authUser.name, authUser.email, {
+          phone: authUser.phone,
+          bloodGroup: authUser.bloodGroup,
+          plan: authUser.plan,
+        });
       }
 
       return { ok: true as const, user: authUser };
@@ -139,11 +154,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signup = useCallback(
-    async (name: string, email: string, password: string) => {
+    async (name: string, email: string, password: string, options?: SignupOptions) => {
       const trimmedName = name.trim();
       const normalized = normalizeEmail(email);
       if (!trimmedName) {
-        return { ok: false as const, error: "Enter your name." };
+        return { ok: false as const, error: "Enter your full name." };
       }
       if (!normalized.includes("@")) {
         return { ok: false as const, error: "Enter a valid email address." };
@@ -153,20 +168,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const phone = options?.phone?.trim() || "+91 98765 43210";
+      const bloodGroup = options?.bloodGroup || "O+";
+      const plan = options?.plan || "Free";
+
       const newUser: AuthUser = {
         id: userId,
         name: trimmedName,
         email: normalized,
-        plan: "Free",
-        phone: "+91 98765 43210",
-        bloodGroup: "O+",
+        plan,
+        phone,
+        bloodGroup,
+        emergencyContactName: options?.emergencyContactName,
+        emergencyContactPhone: options?.emergencyContactPhone,
       };
 
       persist(newUser);
 
       // Provision all connected tables in Supabase for this new user
       if (isSupabaseConfigured) {
-        createInitialUserData(newUser.id, newUser.name, newUser.email, newUser.phone);
+        await createInitialUserData(newUser.id, newUser.name, newUser.email, {
+          phone,
+          bloodGroup,
+          emergencyContactName: options?.emergencyContactName,
+          emergencyContactPhone: options?.emergencyContactPhone,
+          plan,
+        });
       }
 
       return { ok: true as const, user: newUser };
