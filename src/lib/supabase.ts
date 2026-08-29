@@ -238,6 +238,80 @@ export function getActiveUserId(): string {
 }
 
 /**
+ * Looks up an existing user in Supabase by email across users and health_profiles
+ */
+export async function fetchUserByEmail(
+  email: string
+): Promise<{ id: string; name: string; email: string; phone?: string; bloodGroup?: string; plan?: "Free" | "Plus" | "Family" } | null> {
+  if (!supabase) return null;
+  const normalized = email.trim().toLowerCase();
+
+  try {
+    // 1. Try querying users table
+    const { data: userData } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", normalized)
+      .maybeSingle();
+
+    if (userData) {
+      return {
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        bloodGroup: userData.blood_group,
+        plan: (userData.plan as "Free" | "Plus" | "Family") || "Plus",
+      };
+    }
+
+    // 2. Try looking up in health_profiles by constructed id
+    const possibleId = `user_${normalized.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const { data: hpData } = await supabase
+      .from("health_profiles")
+      .select("*")
+      .eq("patient_id", possibleId)
+      .maybeSingle();
+
+    if (hpData) {
+      return {
+        id: hpData.patient_id,
+        name: hpData.full_name,
+        email: normalized,
+        phone: hpData.doctor_phone,
+        bloodGroup: hpData.blood_group,
+        plan: "Plus",
+      };
+    }
+
+    // 3. Fallback check for demo-user
+    if (normalized === "abhi@zivan.health" || normalized === "demo@zivan.health") {
+      const { data: demoHp } = await supabase
+        .from("health_profiles")
+        .select("*")
+        .eq("patient_id", "demo-user")
+        .maybeSingle();
+
+      if (demoHp) {
+        return {
+          id: "demo-user",
+          name: demoHp.full_name || "Abhijeet Das",
+          email: normalized,
+          phone: demoHp.doctor_phone || "+91 98765 43210",
+          bloodGroup: demoHp.blood_group || "O+",
+          plan: "Plus",
+        };
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.warn("fetchUserByEmail exception:", err);
+    return null;
+  }
+}
+
+/**
  * Creates and initializes all connected tables for a newly signed-up user in Supabase
  */
 export async function createInitialUserData(

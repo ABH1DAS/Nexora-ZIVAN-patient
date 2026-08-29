@@ -12,6 +12,7 @@ import {
 import {
   createInitialUserData,
   fetchHealthProfile,
+  fetchUserByEmail,
   isSupabaseConfigured,
 } from "@/lib/supabase";
 
@@ -118,14 +119,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false as const, error: "Password must be at least 4 characters." };
       }
 
+      let authUser: AuthUser;
+
+      // 1. Query Supabase backend for this user
+      if (isSupabaseConfigured) {
+        const remoteUser = await fetchUserByEmail(normalized);
+        if (remoteUser) {
+          authUser = {
+            id: remoteUser.id,
+            name: remoteUser.name,
+            email: remoteUser.email,
+            plan: remoteUser.plan || "Plus",
+            phone: remoteUser.phone || "+91 98765 43210",
+            bloodGroup: remoteUser.bloodGroup || "O+",
+          };
+          persist(authUser);
+          return { ok: true as const, user: authUser };
+        }
+      }
+
+      // 2. Check local session or create new
       const existing = readStoredUser();
-      const userId = existing?.email === normalized ? existing.id : `user_${normalized.replace(/[^a-zA-Z0-9]/g, "_")}`;
+      const userId = existing?.email === normalized ? existing.id : (normalized === "abhi@zivan.health" ? "demo-user" : `user_${normalized.replace(/[^a-zA-Z0-9]/g, "_")}`);
       const name =
         existing?.email === normalized
           ? existing.name
+          : normalized === "abhi@zivan.health"
+          ? "Abhijeet Das"
           : normalized.split("@")[0]?.replace(/[._]/g, " ") || "Member";
 
-      const authUser: AuthUser = {
+      authUser = {
         id: userId,
         name: name
           .split(" ")
@@ -139,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       persist(authUser);
 
-      // Connect & ensure user data exists in Supabase
+      // 3. Connect & ensure user tables exist in Supabase
       if (isSupabaseConfigured) {
         createInitialUserData(authUser.id, authUser.name, authUser.email, {
           phone: authUser.phone,
