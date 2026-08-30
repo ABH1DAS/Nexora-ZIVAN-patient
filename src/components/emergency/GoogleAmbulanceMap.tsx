@@ -17,7 +17,6 @@ import {
   Route,
   ChevronDown,
   ChevronUp,
-  Gauge,
   Car,
 } from "lucide-react";
 import { hospitals as defaultHospitals, type Hospital } from "@/data/hospitals";
@@ -46,11 +45,12 @@ interface GoogleAmbulanceMapProps {
   status?: string;
   etaMinutes?: number;
   nearbyHospitals?: Hospital[];
+  singleHospitalOnly?: boolean;
   onSelectHospital?: (hospital: Hospital) => void;
   onLocationDetected?: (coords: Coordinates, address: string) => void;
 }
 
-const DEFAULT_PATIENT_COORDS: Coordinates = { lat: 26.1722, lng: 91.7594 };
+const DEFAULT_PATIENT_COORDS: Coordinates = { lat: 26.1714, lng: 91.7586 };
 const DEFAULT_HOSPITAL_COORDS: Coordinates = { lat: 26.1557, lng: 91.7706 };
 const DEFAULT_AMBULANCE_COORDS: Coordinates = { lat: 26.1640, lng: 91.7670 };
 
@@ -132,6 +132,7 @@ export function GoogleAmbulanceMap({
   status = "AMBULANCE EN ROUTE",
   etaMinutes = 6,
   nearbyHospitals = defaultHospitals,
+  singleHospitalOnly = false,
   onSelectHospital,
   onLocationDetected,
 }: GoogleAmbulanceMapProps) {
@@ -179,10 +180,18 @@ export function GoogleAmbulanceMap({
     }).sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
   }, [nearbyHospitals, activePatientCoords]);
 
-  const filteredHospitals = dynamicHospitals.filter((h) => {
-    if (filterCategory === "all") return true;
-    return h.category === filterCategory;
-  });
+  const filteredHospitals = useMemo(() => {
+    if (singleHospitalOnly) {
+      const match = dynamicHospitals.filter(
+        (h) =>
+          h.name.toLowerCase().includes(hospitalName.toLowerCase()) ||
+          hospitalName.toLowerCase().includes(h.name.toLowerCase())
+      );
+      return match.length > 0 ? match : dynamicHospitals.slice(0, 1);
+    }
+    if (filterCategory === "all") return dynamicHospitals;
+    return dynamicHospitals.filter((h) => h.category === filterCategory);
+  }, [dynamicHospitals, filterCategory, singleHospitalOnly, hospitalName]);
 
   function detectUserCurrentLocation() {
     if (typeof window === "undefined" || !navigator.geolocation) {
@@ -324,7 +333,7 @@ export function GoogleAmbulanceMap({
     const patientInfoWindow = new google.maps.InfoWindow({
       content: `
         <div style="color: #0f172a; padding: 6px; font-family: sans-serif;">
-          <strong style="color: #dc2626; font-size: 13px;">🚨 Your Location (SOS Origin)</strong>
+          <strong style="color: #dc2626; font-size: 13px;">🚨 Patient Location (SOS Origin)</strong>
           <p style="margin: 4px 0 0; font-size: 11px;">${activePatientLabel}</p>
           <span style="display:inline-block; margin-top: 4px; font-size: 10px; font-weight:bold; background:#fee2e2; color:#991b1b; padding: 2px 6px; border-radius: 4px;">CURRENT GPS PIN</span>
         </div>
@@ -367,13 +376,13 @@ export function GoogleAmbulanceMap({
       ambulanceInfoWindow.open(map, ambulanceMarker);
     });
 
-    // 3. Nearby Hospitals Markers
+    // 3. Hospital Marker (Only logged in / assigned hospital if singleHospitalOnly)
     filteredHospitals.forEach((hosp) => {
       if (!hosp.coordinates) return;
       const hospLatLng = new google.maps.LatLng(hosp.coordinates.lat, hosp.coordinates.lng);
       bounds.extend(hospLatLng);
 
-      const isSelected = hosp.name === hospitalName || hosp.id === selectedHospital?.id;
+      const isSelected = hosp.name === hospitalName || hosp.id === selectedHospital?.id || singleHospitalOnly;
 
       const hospitalMarker = new google.maps.Marker({
         position: hosp.coordinates,
@@ -457,16 +466,15 @@ export function GoogleAmbulanceMap({
             }
           }
         } else {
-          // Precise road waypoints along GS Road network
           const roadSnappedCoordinates = [
-            new google.maps.LatLng(26.1557, 91.7706), // GMCH Emergency Base
-            new google.maps.LatLng(26.1585, 91.7695), // GMCH Hill Link Road
-            new google.maps.LatLng(26.1612, 91.7682), // Bhangagarh Flyover Entrance
-            new google.maps.LatLng(26.1640, 91.7670), // Bhangagarh Junction (GS Road)
-            new google.maps.LatLng(26.1663, 91.7648), // ABC Point (GS Road)
-            new google.maps.LatLng(26.1685, 91.7628), // Tarun Nagar / Rajiv Bhawan (GS Road)
-            new google.maps.LatLng(26.1704, 91.7610), // Lachit Nagar (GS Road)
-            new google.maps.LatLng(activePatientCoords.lat, activePatientCoords.lng), // Ulubari Point (Patient Location)
+            new google.maps.LatLng(26.1557, 91.7706),
+            new google.maps.LatLng(26.1585, 91.7695),
+            new google.maps.LatLng(26.1612, 91.7682),
+            new google.maps.LatLng(26.1640, 91.7670),
+            new google.maps.LatLng(26.1663, 91.7648),
+            new google.maps.LatLng(26.1685, 91.7628),
+            new google.maps.LatLng(26.1704, 91.7610),
+            new google.maps.LatLng(activePatientCoords.lat, activePatientCoords.lng),
           ];
 
           fallbackOuterPolyline = new google.maps.Polyline({
@@ -525,7 +533,7 @@ export function GoogleAmbulanceMap({
     vehicleNumber,
     driverName,
     status,
-    filterCategory,
+    filteredHospitals,
     mapType,
   ]);
 
@@ -555,7 +563,7 @@ export function GoogleAmbulanceMap({
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-teal-300">
-                Road Transport Dispatch · {filteredHospitals.length} Hospitals
+                {singleHospitalOnly ? hospitalName : `Road Transport Dispatch · ${filteredHospitals.length} Hospitals`}
               </span>
             </div>
             <p className="text-xs font-bold text-white flex items-center gap-1.5 truncate max-w-xs sm:max-w-md">
@@ -577,30 +585,31 @@ export function GoogleAmbulanceMap({
             {gpsDetecting ? "Detecting GPS..." : "📍 Get My Location"}
           </button>
 
-          {/* Hospital Category Switcher */}
-          <div className="flex rounded-xl bg-slate-800/90 p-1 text-[11px] font-bold text-slate-300 border border-white/5">
-            <button
-              type="button"
-              onClick={() => setFilterCategory("all")}
-              className={`rounded-lg px-2.5 py-1 transition ${filterCategory === "all" ? "bg-primary text-white shadow" : "hover:text-white"}`}
-            >
-              All ({nearbyHospitals.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterCategory("government")}
-              className={`rounded-lg px-2.5 py-1 transition ${filterCategory === "government" ? "bg-blue-600 text-white shadow" : "hover:text-white"}`}
-            >
-              Govt (3)
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterCategory("private")}
-              className={`rounded-lg px-2.5 py-1 transition ${filterCategory === "private" ? "bg-emerald-600 text-white shadow" : "hover:text-white"}`}
-            >
-              Pvt (4)
-            </button>
-          </div>
+          {!singleHospitalOnly && (
+            <div className="flex rounded-xl bg-slate-800/90 p-1 text-[11px] font-bold text-slate-300 border border-white/5">
+              <button
+                type="button"
+                onClick={() => setFilterCategory("all")}
+                className={`rounded-lg px-2.5 py-1 transition ${filterCategory === "all" ? "bg-primary text-white shadow" : "hover:text-white"}`}
+              >
+                All ({nearbyHospitals.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterCategory("government")}
+                className={`rounded-lg px-2.5 py-1 transition ${filterCategory === "government" ? "bg-blue-600 text-white shadow" : "hover:text-white"}`}
+              >
+                Govt
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterCategory("private")}
+                className={`rounded-lg px-2.5 py-1 transition ${filterCategory === "private" ? "bg-emerald-600 text-white shadow" : "hover:text-white"}`}
+              >
+                Pvt
+              </button>
+            </div>
+          )}
 
           <button
             type="button"
@@ -632,7 +641,6 @@ export function GoogleAmbulanceMap({
         {apiKeyAvailable && mapsLoaded ? (
           <div ref={mapRef} className="h-full w-full" />
         ) : (
-          /* Fallback Canvas */
           <div className="relative h-full w-full bg-[#0a1120] p-6 flex flex-col justify-between overflow-hidden">
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-40" />
 
@@ -648,7 +656,7 @@ export function GoogleAmbulanceMap({
                 </div>
               </div>
               <span className="mt-1.5 rounded-md bg-slate-900/90 px-2 py-0.5 text-[10px] font-bold text-rose-300 border border-rose-500/40 shadow">
-                You (26.1722, 91.7594)
+                Patient (26.1714, 91.7586)
               </span>
             </div>
 
@@ -660,7 +668,7 @@ export function GoogleAmbulanceMap({
                 </div>
               </div>
               <span className="mt-1.5 rounded-md bg-slate-900/90 px-2 py-0.5 text-[10px] font-bold text-teal-300 border border-teal-500/40 shadow">
-                {vehicleNumber} (Emergency Road Transport)
+                {vehicleNumber} (Emergency Transport)
               </span>
             </div>
 
@@ -669,7 +677,7 @@ export function GoogleAmbulanceMap({
                 🏥
               </div>
               <span className="mt-1 rounded-md bg-slate-900/90 px-2 py-0.5 text-[9px] font-bold text-blue-300 border border-blue-500/30">
-                GMCH Trauma (45 Beds Free)
+                {hospitalName}
               </span>
             </div>
           </div>
@@ -685,7 +693,6 @@ export function GoogleAmbulanceMap({
             </div>
           </div>
 
-          {/* Turn-by-Turn Guidance Toggle */}
           <button
             type="button"
             onClick={() => setShowSteps((s) => !s)}
@@ -693,7 +700,7 @@ export function GoogleAmbulanceMap({
           >
             <span className="flex items-center gap-1.5">
               <Route className="h-3.5 w-3.5" />
-              Turn-by-Turn Road Guidance ({routeSteps.length} steps)
+              Turn-by-Turn Guidance ({routeSteps.length} steps)
             </span>
             {showSteps ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
@@ -725,21 +732,21 @@ export function GoogleAmbulanceMap({
         )}
       </div>
 
-      {/* Nearby Hospital Cards Carousel */}
+      {/* Hospital Details Carousel / Single Hospital Panel */}
       <div className="border-t border-white/10 bg-slate-900/95 p-4 backdrop-blur-md">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
             <Building2 className="h-3.5 w-3.5 text-teal-400" />
-            Nearby Hospitals Sorted by Road Travel Proximity
+            {singleHospitalOnly ? "Destination Emergency Facility" : "Nearby Hospitals Sorted by Road Travel Proximity"}
           </span>
           <span className="text-[10px] text-teal-400 font-semibold">
-            Click any hospital pin to view available beds & routing
+            {singleHospitalOnly ? "Hospital Base Connection Verified" : "Click hospital pin to view routing"}
           </span>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {filteredHospitals.slice(0, 4).map((hosp) => {
-            const isTarget = hosp.name === hospitalName;
+          {filteredHospitals.slice(0, singleHospitalOnly ? 1 : 4).map((hosp) => {
+            const isTarget = hosp.name === hospitalName || singleHospitalOnly;
             return (
               <div
                 key={hosp.id}

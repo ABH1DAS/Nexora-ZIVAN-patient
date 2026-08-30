@@ -111,7 +111,7 @@ export default function DashboardEmergencyPage() {
       patientName: user?.name ?? "Abhijeet Das",
       patientPhone: "+91 98765 43210",
       locationLabel: "GS Road, Ulubari / Bhangagarh, Guwahati, Assam 781007",
-      coordinates: { lat: 26.1722, lng: 91.7594 },
+      coordinates: { lat: 26.1714, lng: 91.7586 },
       hospitalId: chosenHosp.id,
       ambulanceType: selectedAmbulanceType,
       doctorSpecialization: selectedSpecialization,
@@ -223,7 +223,7 @@ export default function DashboardEmergencyPage() {
           {/* Google Live Ambulance Tracking Map */}
           <div className="p-4 bg-slate-950/40">
             <GoogleAmbulanceMap
-              patientCoords={activeRequest.coordinates ?? { lat: 26.1722, lng: 91.7594 }}
+              patientCoords={activeRequest.coordinates ?? { lat: 26.1714, lng: 91.7586 }}
               patientLabel={activeRequest.locationLabel ?? "GS Road, Ulubari / Bhangagarh, Guwahati, Assam 781007"}
               ambulanceId={activeRequest.ambulanceId ?? "AMB-01"}
               ambulanceType={activeRequest.ambulanceType ?? "government"}
