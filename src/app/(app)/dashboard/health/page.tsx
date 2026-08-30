@@ -1,8 +1,18 @@
 "use client";
 
-import { analyticsSeries, analyticsTrends, todayMetrics, type AnalyticsRange } from "@/data/healthData";
+import { analyticsSeries, type AnalyticsRange } from "@/data/healthData";
+import { useUserData } from "@/lib/userDataStore";
 import { cn, formatNumber } from "@/lib/utils";
-import { Activity, ArrowDownRight, ArrowUpRight, Heart, Moon, Droplets, Flame, Sparkles, TrendingUp } from "lucide-react";
+import {
+  Activity,
+  ArrowDownRight,
+  ArrowUpRight,
+  Heart,
+  Moon,
+  Droplets,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   Area,
@@ -23,43 +33,52 @@ const ranges: { id: AnalyticsRange; label: string }[] = [
 ];
 
 export default function DashboardHealthPage() {
+  const { metrics, isNewUser } = useUserData();
   const [range, setRange] = useState<AnalyticsRange>("7d");
   const series = useMemo(() => analyticsSeries[range], [range]);
+
+  const chartData = useMemo(() => {
+    return series.activity.map((pt) => ({
+      label: pt.label,
+      steps: isNewUser && metrics.steps === 0 ? 0 : pt.value * 100,
+      hr: metrics.heartRate > 0 ? metrics.heartRate + (pt.value % 10 - 5) : 72,
+    }));
+  }, [series, isNewUser, metrics.steps, metrics.heartRate]);
 
   const metricCards = [
     {
       title: "Heart Rate & SpO₂",
-      value: `${todayMetrics.heartRate} BPM`,
-      subtitle: `SpO₂: ${todayMetrics.spo2}%`,
+      value: metrics.heartRate > 0 ? `${metrics.heartRate} BPM` : "Not recorded",
+      subtitle: metrics.spo2 > 0 ? `SpO₂: ${metrics.spo2}%` : "SpO₂: Not synced",
       trend: "improving",
-      change: "+2% optimal",
+      change: metrics.heartRate > 0 ? "+2% optimal" : "Sync ready",
       icon: Heart,
       color: "text-rose-600 bg-rose-50 border-rose-100",
     },
     {
       title: "Daily Steps",
-      value: formatNumber(todayMetrics.steps),
-      subtitle: `Target: ${formatNumber(todayMetrics.stepsGoal)}`,
+      value: formatNumber(metrics.steps),
+      subtitle: `Target: ${formatNumber(metrics.stepsGoal)}`,
       trend: "improving",
-      change: "+12% vs last week",
+      change: metrics.steps > 0 ? "+12% vs last week" : "Start walking",
       icon: Activity,
       color: "text-teal-600 bg-teal-50 border-teal-100",
     },
     {
       title: "Sleep Recovery",
-      value: `${todayMetrics.sleepHours}h ${todayMetrics.sleepMinutes}m`,
-      subtitle: "85% Deep & REM sleep",
+      value: metrics.sleepHours > 0 ? `${metrics.sleepHours}h ${metrics.sleepMinutes}m` : "0h 0m",
+      subtitle: metrics.sleepScore > 0 ? `${metrics.sleepScore}% Sleep Quality` : "Target: 8h restorative",
       trend: "attention",
-      change: "-15m vs avg",
+      change: metrics.sleepHours > 0 ? "Target logged" : "Log in habits",
       icon: Moon,
       color: "text-indigo-600 bg-indigo-50 border-indigo-100",
     },
     {
       title: "Hydration Target",
-      value: `${todayMetrics.waterLiters} L`,
-      subtitle: `Goal: ${todayMetrics.waterGoal} L`,
+      value: `${metrics.waterLiters} L`,
+      subtitle: `Goal: ${metrics.waterGoal} L`,
       trend: "stable",
-      change: "On track",
+      change: metrics.waterLiters > 0 ? "On track" : "Log water",
       icon: Droplets,
       color: "text-sky-600 bg-sky-50 border-sky-100",
     },
@@ -72,10 +91,10 @@ export default function DashboardHealthPage() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">
             <Sparkles className="h-3.5 w-3.5" aria-hidden />
-            Health Analytics & Vitals
+            Health Analytics &amp; Vitals
           </div>
           <h1 className="mt-2 font-display text-3xl font-bold tracking-tight">
-            Health Tracking & History
+            Health Tracking &amp; History
           </h1>
           <p className="mt-1 text-sm text-muted">
             Monitor vitals, activity trends, sleep recovery and hydration metrics.
@@ -89,7 +108,7 @@ export default function DashboardHealthPage() {
               key={item.id}
               type="button"
               className={cn(
-                "rounded-xl px-4 py-2 text-sm font-semibold transition",
+                "rounded-xl px-4 py-2 text-sm font-semibold transition cursor-pointer",
                 range === item.id
                   ? "bg-primary text-white shadow-sm"
                   : "text-muted hover:text-foreground hover:bg-slate-50",
@@ -143,121 +162,79 @@ export default function DashboardHealthPage() {
         })}
       </div>
 
-      {/* Main Charts Grid */}
+      {/* Analytics Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Activity & Movement Chart */}
-        <div className="rounded-[2rem] border border-border bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
+        {/* Heart Rate Area Chart */}
+        <section className="rounded-[2rem] border border-border bg-white p-6 shadow-sm">
+          <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="font-display text-xl font-semibold">Activity & Movement</h2>
-              <p className="text-xs text-muted">Daily step volume and active minutes</p>
+              <h2 className="font-display text-xl font-semibold">Heart Rate Trend</h2>
+              <p className="text-xs text-muted">Continuous resting and active cardiac rates</p>
             </div>
-            <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700">
-              Avg: 7,420 steps
+            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">
+              Avg {metrics.heartRate > 0 ? metrics.heartRate : 72} BPM
             </span>
           </div>
+
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series.activity}>
+              <AreaChart data={chartData}>
                 <defs>
-                  <linearGradient id="colorActivity" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0d8f7a" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#0d8f7a" stopOpacity={0.02} />
+                  <linearGradient id="hrGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f4f3" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                <Tooltip />
-                <Area type="monotone" dataKey="value" stroke="#0d8f7a" strokeWidth={3} fill="url(#colorActivity)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} domain={[50, 110]} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#0f172a",
+                    border: "none",
+                    borderRadius: "1rem",
+                    color: "#fff",
+                    fontSize: "12px",
+                  }}
+                />
+                <Area type="monotone" dataKey="hr" stroke="#f43f5e" strokeWidth={2.5} fill="url(#hrGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </section>
 
-        {/* Sleep Recovery Duration */}
-        <div className="rounded-[2rem] border border-border bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
+        {/* Daily Steps Bar Chart */}
+        <section className="rounded-[2rem] border border-border bg-white p-6 shadow-sm">
+          <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="font-display text-xl font-semibold">Sleep Duration & Rest</h2>
-              <p className="text-xs text-muted">Hours of restful sleep per day</p>
+              <h2 className="font-display text-xl font-semibold">Step Activity</h2>
+              <p className="text-xs text-muted">Daily distance &amp; physical movement logs</p>
             </div>
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
-              Avg: 7.2 hrs
+            <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700">
+              Goal: {formatNumber(metrics.stepsGoal)}
             </span>
           </div>
+
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={series.sleep}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f4f3" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} />
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#0f172a",
+                    border: "none",
+                    borderRadius: "1rem",
+                    color: "#fff",
+                    fontSize: "12px",
+                  }}
+                />
+                <Bar dataKey="steps" fill="#0d9488" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
-
-        {/* Hydration Progress Chart */}
-        <div className="rounded-[2rem] border border-border bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="font-display text-xl font-semibold">Hydration Log (Liters)</h2>
-              <p className="text-xs text-muted">Daily water intake comparison</p>
-            </div>
-            <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700">
-              Goal: 2.0 L
-            </span>
-          </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series.hydration}>
-                <defs>
-                  <linearGradient id="colorHydration" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0284c7" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#0284c7" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f4f3" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                <Tooltip />
-                <Area type="monotone" dataKey="value" stroke="#0284c7" strokeWidth={3} fill="url(#colorHydration)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Overall Wellbeing Trend */}
-        <div className="rounded-[2rem] border border-border bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="font-display text-xl font-semibold">Wellbeing Score History</h2>
-              <p className="text-xs text-muted">Composite physical & mental wellness rating</p>
-            </div>
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-              Current: 86/100
-            </span>
-          </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series.wellbeing}>
-                <defs>
-                  <linearGradient id="colorWellbeing" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f4f3" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                <YAxis domain={[50, 100]} axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                <Tooltip />
-                <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={3} fill="url(#colorWellbeing)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   );

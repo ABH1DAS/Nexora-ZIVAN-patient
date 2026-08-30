@@ -1,9 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
-import { challenges, gamification } from "@/data/challenges";
-import { todayMetrics } from "@/data/healthData";
 import { useAuth } from "@/lib/auth";
+import { useUserData } from "@/lib/userDataStore";
 import { formatNumber } from "@/lib/utils";
 import {
   Activity,
@@ -28,6 +27,7 @@ import { useEffect, useState } from "react";
 
 export default function DashboardOverviewPage() {
   const { user } = useAuth();
+  const { metrics, challenges, isNewUser } = useUserData();
   const [greeting, setGreeting] = useState("Good day");
 
   useEffect(() => {
@@ -39,73 +39,82 @@ export default function DashboardOverviewPage() {
 
   if (!user) return null;
 
+  const scoreLabel =
+    metrics.wellbeingScore >= 80
+      ? "Optimal"
+      : metrics.wellbeingScore >= 50
+      ? "Good"
+      : isNewUser
+      ? "New User"
+      : "Needs Check-in";
+
   const cards = [
     {
       label: "Heart Rate",
-      value: `${todayMetrics.heartRate} BPM`,
-      hint: "Normal resting rhythm",
+      value: metrics.heartRate > 0 ? `${metrics.heartRate} BPM` : "Not recorded",
+      hint: metrics.heartRate > 0 ? "Normal resting rhythm" : "Sync or log in health tab",
       icon: Heart,
       color: "text-rose-500 bg-rose-50 border-rose-100",
       href: "/dashboard/health",
-      percent: "74%",
+      percent: metrics.heartRate > 0 ? `${Math.min(metrics.heartRate, 100)}%` : "0%",
     },
     {
       label: "Daily Steps",
-      value: formatNumber(todayMetrics.steps),
-      hint: `Goal: ${formatNumber(todayMetrics.stepsGoal)} steps`,
+      value: formatNumber(metrics.steps),
+      hint: `Goal: ${formatNumber(metrics.stepsGoal)} steps`,
       icon: Activity,
       color: "text-teal-600 bg-teal-50 border-teal-100",
       href: "/dashboard/health",
-      percent: `${Math.round((todayMetrics.steps / todayMetrics.stepsGoal) * 100)}%`,
+      percent: `${Math.min(Math.round((metrics.steps / Math.max(metrics.stepsGoal, 1)) * 100), 100)}%`,
     },
     {
       label: "Sleep Quality",
-      value: `${todayMetrics.sleepHours}h ${todayMetrics.sleepMinutes}m`,
-      hint: "7h 30m target met",
+      value: metrics.sleepHours > 0 ? `${metrics.sleepHours}h ${metrics.sleepMinutes}m` : "0h 0m",
+      hint: metrics.sleepHours > 0 ? "Sleep target logged" : "Log sleep in habits",
       icon: Moon,
       color: "text-indigo-600 bg-indigo-50 border-indigo-100",
-      href: "/dashboard/health",
-      percent: "94%",
+      href: "/dashboard/habits",
+      percent: `${Math.min(Math.round((metrics.sleepHours / 8.0) * 100), 100)}%`,
     },
     {
       label: "Hydration",
-      value: `${todayMetrics.waterLiters}L`,
-      hint: `Goal: ${todayMetrics.waterGoal}L daily`,
+      value: `${metrics.waterLiters}L`,
+      hint: `Goal: ${metrics.waterGoal}L daily`,
       icon: Droplets,
       color: "text-sky-600 bg-sky-50 border-sky-100",
       href: "/dashboard/habits",
-      percent: `${Math.round((todayMetrics.waterLiters / todayMetrics.waterGoal) * 100)}%`,
+      percent: `${Math.min(Math.round((metrics.waterLiters / Math.max(metrics.waterGoal, 1)) * 100), 100)}%`,
     },
   ];
 
   const recentActivities = [
     {
-      title: "Sync with Fitness Band",
-      category: "Vitals",
-      time: "10 mins ago",
-      icon: Heart,
-      badge: "Heart rate stable (74 BPM)",
+      title: metrics.waterLiters > 0 ? "Water Intake Recorded" : "Hydration Tracker Ready",
+      category: "Hydration",
+      time: metrics.waterLiters > 0 ? "Today" : "Active",
+      icon: Droplets,
+      badge: metrics.waterLiters > 0 ? `${metrics.waterLiters} L logged today` : "Tap below to log water",
     },
     {
-      title: "Logged Water Intake",
-      category: "Hydration",
-      time: "45 mins ago",
-      icon: Droplets,
-      badge: "+250 ml recorded",
+      title: metrics.steps > 0 ? "Daily Step Activity" : "Step Counter Initialized",
+      category: "Activity",
+      time: "Today",
+      icon: Activity,
+      badge: `${formatNumber(metrics.steps)} / ${formatNumber(metrics.stepsGoal)} steps`,
     },
     {
       title: "Daily Mood Check-in",
       category: "Wellbeing",
-      time: "2 hours ago",
+      time: "Ready",
       icon: Brain,
-      badge: "Feeling Energized 😊",
+      badge: metrics.wellbeingScore > 0 ? `Score: ${metrics.wellbeingScore}/100` : "Tap to complete first check-in",
     },
     {
-      title: "Morning Jog Walk",
-      category: "Exercise",
-      time: "4 hours ago",
-      icon: Zap,
-      badge: "3.4 km · 420 kcal",
+      title: "Emergency SOS Safety Shield",
+      category: "Emergency",
+      time: "24/7 Active",
+      icon: ShieldAlert,
+      badge: "One-tap hospital ambulance dispatch ready",
     },
   ];
 
@@ -123,11 +132,22 @@ export default function DashboardOverviewPage() {
               {greeting}, {user.name.split(" ")[0]}!
             </div>
             <h1 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              Overall Wellbeing Score: <span className="text-teal-300">{todayMetrics.wellbeingScore}/100</span>
+              Overall Wellbeing Score:{" "}
+              <span className="text-teal-300">
+                {metrics.wellbeingScore > 0 ? `${metrics.wellbeingScore}/100` : "Ready to Start"}
+              </span>
             </h1>
             <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-teal-100/80 sm:text-base">
-              Your health metrics are optimal today. All systems normal. You are on a{" "}
-              <strong className="text-white">{gamification.streak}-day healthy streak</strong>!
+              {isNewUser ? (
+                <span>
+                  Welcome to ZIVAN! Your new health dashboard has started from <strong>0</strong>. Log your water, habits, and vitals to build your healthy streak!
+                </span>
+              ) : (
+                <span>
+                  Your personal health data is synced to cloud. You are on a{" "}
+                  <strong className="text-white">{metrics.streakDays}-day healthy streak</strong>!
+                </span>
+              )}
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -150,13 +170,17 @@ export default function DashboardOverviewPage() {
           <div className="flex flex-col items-center justify-center rounded-[2rem] border border-white/15 bg-white/10 p-6 backdrop-blur-md">
             <div className="relative flex h-28 w-28 items-center justify-center rounded-full border-4 border-teal-400/30 bg-teal-900/40">
               <div className="text-center">
-                <span className="font-display text-3xl font-bold text-teal-200">{todayMetrics.wellbeingScore}</span>
-                <span className="block text-[10px] uppercase font-bold tracking-wider text-teal-300/70">Excellent</span>
+                <span className="font-display text-3xl font-bold text-teal-200">
+                  {metrics.wellbeingScore > 0 ? metrics.wellbeingScore : "0"}
+                </span>
+                <span className="block text-[10px] uppercase font-bold tracking-wider text-teal-300/70">
+                  {scoreLabel}
+                </span>
               </div>
             </div>
             <div className="mt-3 text-center">
-              <p className="text-xs font-semibold text-teal-100">🔥 {gamification.streak} Day Streak</p>
-              <p className="text-[11px] text-teal-200/60">{formatNumber(gamification.points)} Points Earned</p>
+              <p className="text-xs font-semibold text-teal-100">🔥 {metrics.streakDays} Day Streak</p>
+              <p className="text-[11px] text-teal-200/60">{formatNumber(metrics.points)} Points Earned</p>
             </div>
           </div>
         </div>
@@ -190,7 +214,7 @@ export default function DashboardOverviewPage() {
             </div>
             <div>
               <p className="font-bold text-sky-950 text-sm">Log Water Intake</p>
-              <p className="text-xs text-sky-700">{todayMetrics.waterLiters}L / {todayMetrics.waterGoal}L today</p>
+              <p className="text-xs text-sky-700">{metrics.waterLiters}L / {metrics.waterGoal}L today</p>
             </div>
           </div>
           <ArrowUpRight className="h-4 w-4 text-sky-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition" />
@@ -234,7 +258,7 @@ export default function DashboardOverviewPage() {
         <div className="flex items-center justify-between">
           <h2 className="font-display text-2xl font-bold tracking-tight">Health Overview</h2>
           <Link href="/dashboard/health" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
-            View details & trends <ArrowUpRight className="h-3.5 w-3.5" />
+            View details &amp; trends <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
         </div>
 
@@ -316,7 +340,7 @@ export default function DashboardOverviewPage() {
 
           <ul className="space-y-4">
             {challenges.slice(0, 3).map((challenge) => {
-              const pct = Math.round((challenge.progress / challenge.total) * 100);
+              const pct = Math.min(Math.round((challenge.progress / Math.max(challenge.totalTarget, 1)) * 100), 100);
               return (
                 <li key={challenge.id} className="rounded-2xl border border-border/60 p-4">
                   <div className="mb-2 flex items-center justify-between text-sm">
@@ -328,7 +352,7 @@ export default function DashboardOverviewPage() {
                   </div>
                   <div className="mt-2 flex justify-between text-xs text-muted">
                     <span>{challenge.category}</span>
-                    <span>{challenge.progress} / {challenge.total} {challenge.unit}</span>
+                    <span>{challenge.progress} / {challenge.totalTarget} {challenge.unit}</span>
                   </div>
                 </li>
               );

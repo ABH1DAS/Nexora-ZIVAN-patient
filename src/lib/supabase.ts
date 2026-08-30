@@ -337,9 +337,10 @@ export async function createInitialUserData(
     const today = now.split("T")[0];
     const phone = options?.phone || "+91 98765 43210";
     const bloodGroup = options?.bloodGroup || "O+";
-    const contactName = options?.emergencyContactName || "Dr. Ananya Sharma";
-    const contactPhone = options?.emergencyContactPhone || "+91 98765 43210";
+    const contactName = options?.emergencyContactName || "";
+    const contactPhone = options?.emergencyContactPhone || "";
     const plan = options?.plan || "Free";
+    const isDemo = userId === "demo-user" || email.trim().toLowerCase() === "abhi@zivan.health";
 
     // 1. Save credentials in Users Table
     const userPayload: Record<string, any> = {
@@ -370,68 +371,75 @@ export async function createInitialUserData(
         patient_id: userId,
         full_name: name,
         blood_group: bloodGroup,
-        date_of_birth: "1998-05-14",
-        gender: "Male",
-        allergies: ["Penicillin", "Dust Mites"],
-        medications: ["Vitamin D3 1000IU"],
-        medical_history: ["Mild Seasonal Allergies"],
+        date_of_birth: isDemo ? "1998-05-14" : "",
+        gender: isDemo ? "Male" : "",
+        allergies: isDemo ? ["Penicillin", "Dust Mites"] : [],
+        medications: isDemo ? ["Vitamin D3 1000IU"] : [],
+        medical_history: isDemo ? ["Mild Seasonal Allergies"] : [],
         organ_donor: true,
-        doctor_name: contactName,
-        doctor_phone: contactPhone,
-        emergency_notes: "Initial member registration",
+        doctor_name: isDemo ? "Dr. Ananya Sharma" : contactName,
+        doctor_phone: isDemo ? "+91 98765 43210" : contactPhone,
+        emergency_notes: isDemo ? "Initial member registration" : "",
         created_at: now,
         updated_at: now,
       },
       { onConflict: "patient_id" }
     );
 
-    // 3. Default Emergency Contacts for this user
-    await supabase.from("emergency_contacts").insert([
-      {
-        patient_id: userId,
-        name: contactName,
-        phone: contactPhone,
-        relationship: contactName.includes("Dr") ? "Family Doctor" : "Primary Contact",
-        priority: "Primary",
-      },
-      {
-        patient_id: userId,
-        name: "Emergency Kin",
-        phone: phone,
-        relationship: "Family",
-        priority: "Primary",
-      },
-    ]);
+    // 3. Emergency Contacts for this user (only if provided)
+    if (contactName && contactPhone) {
+      await supabase.from("emergency_contacts").insert([
+        {
+          patient_id: userId,
+          name: contactName,
+          phone: contactPhone,
+          relationship: "Primary Contact",
+          priority: "Primary",
+        },
+      ]);
+    } else if (isDemo) {
+      await supabase.from("emergency_contacts").insert([
+        {
+          patient_id: userId,
+          name: "Dr. Ananya Sharma",
+          phone: "+91 98765 43210",
+          relationship: "Family Doctor",
+          priority: "Primary",
+        },
+      ]);
+    }
 
-    // 4. Initial Daily Metrics
+    // 4. Initial Daily Metrics (Start from 0 for new real users)
     await supabase.from("daily_metrics").upsert(
       {
         patient_id: userId,
         metric_date: today,
-        heart_rate: 72,
-        resting_hr: 68,
-        spo2: 98,
-        steps: 6420,
+        heart_rate: isDemo ? 72 : 0,
+        resting_hr: isDemo ? 68 : 0,
+        spo2: isDemo ? 98 : 0,
+        steps: isDemo ? 6420 : 0,
         step_goal: 10000,
-        active_minutes: 45,
-        calories_burned: 420,
-        sleep_hours: 7.5,
-        sleep_score: 85,
-        water_liters: 2.1,
+        active_minutes: isDemo ? 45 : 0,
+        calories_burned: isDemo ? 420 : 0,
+        sleep_hours: isDemo ? 7.5 : 0,
+        sleep_score: isDemo ? 85 : 0,
+        water_liters: isDemo ? 2.1 : 0,
         water_goal: 3.0,
       },
       { onConflict: "patient_id,metric_date" }
     );
 
-    // 5. Initial Water Log
-    await supabase.from("water_logs").insert([
-      {
-        patient_id: userId,
-        amount_ml: 500,
-        note: "Morning Hydration (Registration Day)",
-        logged_at: now,
-      },
-    ]);
+    // 5. Initial Water Log (Only for demo user)
+    if (isDemo) {
+      await supabase.from("water_logs").insert([
+        {
+          patient_id: userId,
+          amount_ml: 500,
+          note: "Morning Hydration (Demo Day)",
+          logged_at: now,
+        },
+      ]);
+    }
 
     return true;
   } catch (err) {
@@ -945,6 +953,23 @@ export async function fetchAmbulancesByHospital(
       .select("*")
       .eq("hospital_id", hospitalId)
       .order("id");
+    if (error) return [];
+    return (data as SupabaseAmbulance[]) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchAvailableAmbulances(
+  hospitalId: string
+): Promise<SupabaseAmbulance[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("ambulances")
+      .select("*")
+      .eq("hospital_id", hospitalId)
+      .eq("status", "available");
     if (error) return [];
     return (data as SupabaseAmbulance[]) ?? [];
   } catch {

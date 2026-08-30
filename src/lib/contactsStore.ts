@@ -51,14 +51,21 @@ function getUserStorageKey(userId = getActiveUserId()) {
 }
 
 export function getEmergencyContacts(userId = getActiveUserId()): EmergencyContactItem[] {
-  if (!canUseStorage()) return DEFAULT_CONTACTS;
+  const isDemo = userId === "demo-user" || userId === "abhi@zivan.health";
+  if (!canUseStorage()) return isDemo ? DEFAULT_CONTACTS : [];
   try {
-    const raw = localStorage.getItem(getUserStorageKey(userId)) || localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_CONTACTS;
-    const parsed = JSON.parse(raw) as EmergencyContactItem[];
-    return parsed.length > 0 ? parsed : DEFAULT_CONTACTS;
+    const raw = localStorage.getItem(getUserStorageKey(userId));
+    if (raw) {
+      return JSON.parse(raw) as EmergencyContactItem[];
+    }
+    const legacyRaw = localStorage.getItem(STORAGE_KEY);
+    if (legacyRaw && isDemo) {
+      const parsed = JSON.parse(legacyRaw) as EmergencyContactItem[];
+      return parsed.length > 0 ? parsed : DEFAULT_CONTACTS;
+    }
+    return isDemo ? DEFAULT_CONTACTS : [];
   } catch {
-    return DEFAULT_CONTACTS;
+    return isDemo ? DEFAULT_CONTACTS : [];
   }
 }
 

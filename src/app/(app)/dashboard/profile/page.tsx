@@ -42,12 +42,13 @@ interface PatientHealthProfile {
 
 export default function DashboardProfilePage() {
   const { user } = useAuth();
+  const isDemo = user?.id === "demo-user" || user?.email === "abhi@zivan.health";
   const [profile, setProfile] = useState<PatientHealthProfile>({
-    name: "Abhijeet Das",
-    age: 28,
-    bloodGroup: "O+",
-    allergies: ["Penicillin", "Dust Mites"],
-    medications: ["Vitamin D3 1000IU", "Asthma Inhaler (as needed)"],
+    name: user?.name || "Member",
+    age: isDemo ? 28 : 25,
+    bloodGroup: user?.bloodGroup || "O+",
+    allergies: isDemo ? ["Penicillin", "Dust Mites"] : [],
+    medications: isDemo ? ["Vitamin D3 1000IU", "Asthma Inhaler (as needed)"] : [],
   });
 
   const [contacts, setContacts] = useState<EmergencyContactItem[]>([]);
@@ -64,16 +65,18 @@ export default function DashboardProfilePage() {
 
   useEffect(() => {
     const activeId = user?.id || "demo-user";
+    const userIsDemo = activeId === "demo-user" || user?.email === "abhi@zivan.health";
+
     // 1. Fetch from Supabase for active user
     if (isSupabaseConfigured) {
       fetchHealthProfile(activeId).then((remote) => {
         if (remote) {
           setProfile({
             name: remote.full_name || user?.name || "Member",
-            age: 28,
-            bloodGroup: remote.blood_group || "O+",
-            allergies: remote.allergies || ["Penicillin"],
-            medications: remote.medications || ["Vitamin D3"],
+            age: userIsDemo ? 28 : 25,
+            bloodGroup: remote.blood_group || user?.bloodGroup || "O+",
+            allergies: remote.allergies || (userIsDemo ? ["Penicillin"] : []),
+            medications: remote.medications || (userIsDemo ? ["Vitamin D3"] : []),
           });
         }
       });
@@ -81,15 +84,19 @@ export default function DashboardProfilePage() {
 
     if (typeof window !== "undefined") {
       const userProfileKey = `${PROFILE_PREFS_KEY}_${activeId}`;
-      const rawProfile = localStorage.getItem(userProfileKey) || localStorage.getItem(PROFILE_PREFS_KEY);
+      const rawProfile = localStorage.getItem(userProfileKey);
       if (rawProfile) {
         try {
           setProfile(JSON.parse(rawProfile));
-        } catch {
-          // fallback
-        }
+        } catch {}
       } else if (user?.name) {
-        setProfile((prev) => ({ ...prev, name: user.name }));
+        setProfile((prev) => ({
+          ...prev,
+          name: user.name,
+          bloodGroup: user.bloodGroup || prev.bloodGroup,
+          allergies: userIsDemo ? prev.allergies : [],
+          medications: userIsDemo ? prev.medications : [],
+        }));
       }
 
       const rawHospitals = localStorage.getItem(PREFERRED_HOSPITALS_KEY);
