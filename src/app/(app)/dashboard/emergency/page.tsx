@@ -9,6 +9,9 @@ import {
   createAmbulanceRequest,
   statusLabel,
   subscribeAmbulanceRequests,
+  markAmbulanceArrived,
+  markPickedUp,
+  markArrivedAtHospital,
 } from "@/lib/ambulanceStore";
 import {
   addEmergencyContact,
@@ -220,16 +223,110 @@ export default function DashboardEmergencyPage() {
           {/* Google Live Ambulance Tracking Map */}
           <div className="p-4 bg-slate-950/40">
             <GoogleAmbulanceMap
-              patientCoords={activeRequest.coordinates ?? { lat: 28.6139, lng: 77.209 }}
-              patientLabel={activeRequest.locationLabel ?? "742 Evergreen Terrace, Sector 14"}
+              patientCoords={activeRequest.coordinates ?? { lat: 26.1722, lng: 91.7594 }}
+              patientLabel={activeRequest.locationLabel ?? "GS Road, Ulubari / Bhangagarh, Guwahati, Assam 781007"}
               ambulanceId={activeRequest.ambulanceId ?? "AMB-01"}
               ambulanceType={activeRequest.ambulanceType ?? "government"}
               driverName={activeRequest.driverName ?? "Rajesh Kumar (Paramedic Leader)"}
-              vehicleNumber={activeRequest.vehicleNumber ?? "DL-01-EV-4892"}
-              hospitalName={activeRequest.hospitalName ?? "City Super-Specialty Hospital"}
+              vehicleNumber={activeRequest.vehicleNumber ?? "AS-01-EV-4892"}
+              hospitalName={activeRequest.hospitalName ?? "GMCH Emergency Trauma Center"}
               status={activeRequest.status}
-              etaMinutes={activeRequest.etaMinutes ?? 8}
+              etaMinutes={activeRequest.etaMinutes ?? 6}
             />
+          </div>
+
+          {/* ─── PATIENT SCENE VERIFICATION & "AMBULANCE ARRIVED" ACTION SECTION ─── */}
+          <div className="mx-4 sm:mx-6 rounded-2xl border border-teal-500/30 bg-gradient-to-r from-teal-950/80 via-slate-900 to-slate-900 p-5 shadow-xl backdrop-blur-md">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3.5">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-500/20 text-teal-300 border border-teal-500/30 shadow-inner">
+                  <CheckCircle2 className="h-6 w-6 text-teal-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-teal-300">
+                      Patient Arrival Verification
+                    </span>
+                    {activeRequest.status === "AMBULANCE ARRIVED" && (
+                      <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-extrabold text-emerald-300 border border-emerald-500/30">
+                        PARAMEDICS ON SCENE
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-display text-base font-bold text-white mt-0.5">
+                    {activeRequest.status === "AMBULANCE ARRIVED"
+                      ? "Ambulance is On-Scene with You"
+                      : activeRequest.status === "PATIENT PICKED UP"
+                      ? "Patient Onboard · Heading to Emergency ER"
+                      : activeRequest.status === "ARRIVED AT HOSPITAL"
+                      ? "Admitted to Hospital Emergency Care"
+                      : "Has the ambulance arrived at your location?"}
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
+                    {activeRequest.status === "AMBULANCE ARRIVED"
+                      ? "Paramedic crew is currently attending to the patient. When ready for hospital transit, tap to confirm patient boarding."
+                      : activeRequest.status === "PATIENT PICKED UP"
+                      ? "Ambulance is fast-tracking to the hospital emergency trauma bay."
+                      : activeRequest.status === "ARRIVED AT HOSPITAL"
+                      ? "Care handed over to hospital emergency triage team."
+                      : "Tap 'Mark Ambulance Arrived' once you meet paramedic Rajesh Kumar or spot vehicle AS-01-EV-4892 to notify the ER desk."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                {activeRequest.status !== "AMBULANCE ARRIVED" &&
+                 activeRequest.status !== "PATIENT PICKED UP" &&
+                 activeRequest.status !== "ARRIVED AT HOSPITAL" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!activeRequest?.id) return;
+                      markAmbulanceArrived(activeRequest.id);
+                      setActiveRequest((prev) => prev ? { ...prev, status: "AMBULANCE ARRIVED", etaMinutes: 0 } : null);
+                    }}
+                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:from-emerald-500 hover:to-teal-500 hover:shadow-[0_0_25px_rgba(16,185,129,0.6)] transition active:scale-95 cursor-pointer"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Mark Ambulance Arrived
+                  </button>
+                ) : activeRequest.status === "AMBULANCE ARRIVED" ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="flex items-center gap-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 px-3.5 py-2 text-xs font-bold text-emerald-300">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      Ambulance Arrived Confirmed
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!activeRequest?.id) return;
+                        markPickedUp(activeRequest.id);
+                        setActiveRequest((prev) => prev ? { ...prev, status: "PATIENT PICKED UP" } : null);
+                      }}
+                      className="flex items-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 px-4 py-2 text-xs font-bold text-white shadow-md transition cursor-pointer"
+                    >
+                      Mark Patient Onboard →
+                    </button>
+                  </div>
+                ) : activeRequest.status === "PATIENT PICKED UP" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!activeRequest?.id) return;
+                      markArrivedAtHospital(activeRequest.id);
+                      setActiveRequest((prev) => prev ? { ...prev, status: "ARRIVED AT HOSPITAL", etaMinutes: 0 } : null);
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-bold text-white shadow-md transition cursor-pointer"
+                  >
+                    Mark Arrived at Hospital ER
+                  </button>
+                ) : (
+                  <span className="rounded-xl bg-emerald-500/20 border border-emerald-500/40 px-4 py-2 text-xs font-bold text-emerald-300">
+                    Admitted at ER
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* 8-Step Timeline Component */}
@@ -268,6 +365,48 @@ export default function DashboardEmergencyPage() {
       ) : (
         /* ─── 4-STEP SOS EMERGENCY CONFIGURATION WIZARD ─── */
         <div className="space-y-6">
+          {/* Active Request Alert Banner on Wizard */}
+          {activeRequest && (
+            <div className="rounded-2xl border border-teal-500/30 bg-teal-950/80 p-4 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="h-3 w-3 rounded-full bg-emerald-400 animate-ping" />
+                <div>
+                  <p className="text-xs font-bold text-teal-300 uppercase tracking-wider">
+                    Active Dispatch #{activeRequest.id.slice(-6)} · {statusLabel(activeRequest.status)}
+                  </p>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    {activeRequest.status === "AMBULANCE ARRIVED"
+                      ? "Ambulance has arrived at your location."
+                      : "Ambulance is navigating to your GPS location."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {activeRequest.status !== "AMBULANCE ARRIVED" &&
+                 activeRequest.status !== "PATIENT PICKED UP" &&
+                 activeRequest.status !== "ARRIVED AT HOSPITAL" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markAmbulanceArrived(activeRequest.id);
+                      setActiveRequest((prev) => prev ? { ...prev, status: "AMBULANCE ARRIVED", etaMinutes: 0 } : null);
+                    }}
+                    className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow transition cursor-pointer"
+                  >
+                    Mark Ambulance Arrived
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setWizardStep("tracking")}
+                  className="rounded-xl bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs font-bold text-white transition cursor-pointer"
+                >
+                  View Tracking Map →
+                </button>
+              </div>
+            </div>
+          )}
           {/* Step Progress Bar */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 glow-card">
             <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700 mb-2">
