@@ -29,11 +29,12 @@ const columns = [
     ],
   },
   {
-    title: "Emergency",
+    title: "Emergency & Portal",
     links: [
       { href: "/emergency", label: "Emergency Support" },
       { href: "/emergency#contacts", label: "Emergency Contacts" },
       { href: "/dashboard/emergency", label: "Live SOS Dispatch" },
+      { href: "https://nexora-zivan.vercel.app/hospital/login", label: "🏥 Hospital Portal" },
     ],
   },
 ];

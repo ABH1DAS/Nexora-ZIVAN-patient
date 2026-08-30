@@ -7,7 +7,9 @@ import {
   Activity,
   Bot,
   Brain,
+  Building2,
   CheckSquare,
+  ExternalLink,
   Gift,
   LayoutDashboard,
   LogOut,
@@ -101,7 +103,23 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             ZIVAN
           </Link>
           <p className="mt-1 text-xs text-muted">Your health dashboard</p>
-          <div className="mt-8 flex-1">{nav}</div>
+          <div className="mt-8 flex-1 overflow-y-auto pr-1">{nav}</div>
+
+          {/* Direct Hospital Portal External Button */}
+          <a
+            href="https://nexora-zivan.vercel.app/hospital/login"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-3 flex items-center justify-between rounded-2xl border border-teal-500/30 bg-teal-50/80 px-3.5 py-2.5 text-xs font-bold text-teal-950 hover:bg-teal-100 hover:border-teal-500 transition shadow-2xs group"
+            title="Open Hospital & Emergency Dispatch Portal"
+          >
+            <span className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-teal-700" />
+              Hospital Portal
+            </span>
+            <ExternalLink className="h-3.5 w-3.5 text-teal-600 opacity-60 group-hover:opacity-100" />
+          </a>
+
           <div className="rounded-2xl border border-border bg-[#f7fbfa] p-3">
             <p className="truncate text-sm font-semibold">{user.name}</p>
             <p className="truncate text-xs text-muted">{user.email}</p>
@@ -139,6 +157,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Hospital Portal Link Button */}
+              <a
+                href="https://nexora-zivan.vercel.app/hospital/login"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-teal-600/30 bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-950 transition hover:bg-teal-100 hover:border-teal-500 shadow-2xs"
+              >
+                <Building2 className="h-3.5 w-3.5 text-teal-700" />
+                <span>Hospital Portal</span>
+                <ExternalLink className="h-3 w-3 text-teal-600 opacity-60" />
+              </a>
+
               <Button size="sm" variant="emergency" href="/dashboard/emergency">
                 SOS
               </Button>
@@ -149,11 +179,23 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           </header>
 
           {open && (
-            <div className="border-b border-border bg-white p-4 lg:hidden">
+            <div className="border-b border-border bg-white p-4 lg:hidden space-y-3">
               {nav}
+              <a
+                href="https://nexora-zivan.vercel.app/hospital/login"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between rounded-xl border border-teal-500/30 bg-teal-50 px-4 py-3 text-sm font-bold text-teal-950 hover:bg-teal-100"
+              >
+                <span className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-teal-700" />
+                  Hospital Portal
+                </span>
+                <ExternalLink className="h-3.5 w-3.5 text-teal-600" />
+              </a>
               <Button
                 variant="secondary"
-                className="mt-3 w-full"
+                className="w-full"
                 onClick={handleLogout}
               >
                 <LogOut className="h-4 w-4" aria-hidden />
