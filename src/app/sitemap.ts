@@ -13,8 +13,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/login",
     "/signup",
     "/dashboard",
-    "/hospital",
-    "/hospital/login",
+    "/dashboard/emergency",
   ];
 
   return routes.map((route) => ({

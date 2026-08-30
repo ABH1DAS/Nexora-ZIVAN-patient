@@ -180,10 +180,6 @@ export default function DashboardEmergencyPage() {
               View Active SOS Tracking ({statusLabel(activeRequest.status)})
             </button>
           )}
-
-          <Button href="/hospital/login" variant="ghost" className="text-xs text-slate-700 hover:bg-slate-100">
-            <ExternalLink className="h-4 w-4 mr-1" /> Open Hospital Portal
-          </Button>
         </div>
       </div>
 
