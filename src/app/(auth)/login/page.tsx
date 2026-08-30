@@ -61,11 +61,6 @@ function LoginForm() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 rounded-2xl border border-teal-200/80 bg-teal-50/70 px-3.5 py-2 text-xs font-semibold text-teal-950">
-        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-        <span>Connected to Supabase Cloud Database</span>
-      </div>
-
       <form className="mt-6 space-y-4" onSubmit={onSubmit} noValidate>
         <div>
           <label htmlFor="email" className="mb-1.5 block text-xs font-bold text-foreground">
